@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { supabase } from "./supabaseClient"
 import { useUserLocation } from "./useUserLocation"
+import { HotPicksBoard } from "./HotPicks"
 import "./create-event.css"
 
 type DateFilter = "Any day" | "Today" | "Tomorrow" | "This weekend"
 type AppView = "explore" | "saved"
-
 type ApiSource = { title?: string; url?: string }
 
 type ApiEvent = {
@@ -63,14 +63,18 @@ type AppEvent = {
   mapsUrl: string
   soon: boolean
   isUserPost: boolean
+  startsAt: Date | null
+  endsAt: Date | null
 }
+
+type Comment = { id: string; body: string; created_at: string }
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>
 }
 
-const categories = ["All", "Music", "Art", "Comedy", "Dance", "Festivals", "Food", "Film", "MUN", "Birthday", "Sports", "Other"]
+const categories = ["All", "Music", "Art", "Comedy", "Dance", "Festivals", "Food", "Film", "MUN", "Birthday", "Sports", "Hackathon", "Other"]
 const dateFilters: DateFilter[] = ["Any day", "Today", "Tomorrow", "This weekend"]
 const eventColors = ["#e8452c", "#1f2a5a", "#f1b82d", "#28766a", "#b25488", "#d3633a", "#2d6073"]
 
@@ -97,6 +101,32 @@ function dateGroupFor(date: Date | null): DateFilter {
   const daysUntilWeekend = (6 - now.getDay() + 7) % 7
   if ((weekday === 0 || weekday === 6) && difference >= 0 && difference <= daysUntilWeekend + 1) return "This weekend"
   return "Any day"
+}
+
+const igniteEvent: AppEvent = {
+  id: "sreenidhi-ignite-2026",
+  day: "05",
+  weekday: "THU",
+  month: "NOV",
+  title: "Sreenidhi IGNITE — Student Innovation Marathon",
+  venue: "New Design Block, Sreenidhi International School",
+  area: "Hyderabad, Telangana",
+  time: "9:00 AM",
+  endTime: "4:00 PM",
+  category: "Hackathon",
+  image: "https://placehold.co/900x600/1f2a5a/f4efe6/png?text=Sreenidhi+IGNITE",
+  color: "#1f2a5a",
+  dateGroup: "Today",
+  price: "₹6,750 per team",
+  description: "A two-day innovation marathon for students in MYP 1–DP 2. Teams build games, apps, Rube Goldberg machines, or CAD designs across hackathon and makeathon pathways.",
+  summary: "Happening now at Sreenidhi International School: two days of building, testing, and presenting student innovations.",
+  sourceUrl: "https://ignitebysis.com/",
+  sources: [{ title: "Official IGNITE website", url: "https://ignitebysis.com/" }],
+  mapsUrl: "https://www.google.com/maps/search/?api=1&query=Sreenidhi%20International%20School%20Aziznagar%20Hyderabad",
+  soon: true,
+  isUserPost: false,
+  startsAt: new Date("2026-11-05T09:00:00+05:30"),
+  endsAt: new Date("2026-11-06T16:00:00+05:30"),
 }
 
 function normaliseEvent(raw: ApiEvent, index: number): AppEvent | null {
@@ -127,6 +157,8 @@ function normaliseEvent(raw: ApiEvent, index: number): AppEvent | null {
     mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${venue}, ${area}`)}`,
     soon: dateGroupFor(date) === "Today",
     isUserPost: false,
+    startsAt: date,
+    endsAt: null,
   }
 }
 
@@ -134,6 +166,7 @@ function userEventToAppEvent(row: DbEvent, index: number): AppEvent {
   const date = new Date(row.starts_at)
   const validDate = !Number.isNaN(date.getTime()) ? date : null
   const venue = row.address || "Venue to be announced"
+  const endsAt = validDate ? new Date(validDate.getTime() + 6 * 60 * 60 * 1000) : null
   return {
     id: row.id,
     day: validDate ? String(validDate.getDate()).padStart(2, "0") : "--",
@@ -156,10 +189,12 @@ function userEventToAppEvent(row: DbEvent, index: number): AppEvent {
     mapsUrl: row.maps_url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${venue}, ${row.area}`)}`,
     soon: dateGroupFor(validDate) === "Today",
     isUserPost: true,
+    startsAt: validDate,
+    endsAt,
   }
 }
 
-function Icon({ name, size = 20 }: { name: "arrow" | "bookmark" | "calendar" | "check" | "chevron" | "close" | "compass" | "link" | "location" | "plus" | "search" | "share" | "ticket"; size?: number }) {
+function Icon({ name, size = 20 }: { name: "arrow" | "bookmark" | "calendar" | "check" | "chevron" | "close" | "comment" | "compass" | "heart" | "link" | "location" | "plus" | "search" | "share" | "ticket"; size?: number }) {
   const paths = {
     arrow: <path d="M5 12h14M13 6l6 6-6 6" />,
     bookmark: <path d="M6 4.8A1.8 1.8 0 0 1 7.8 3h8.4A1.8 1.8 0 0 1 18 4.8V21l-6-4-6 4V4.8Z" />,
@@ -167,7 +202,9 @@ function Icon({ name, size = 20 }: { name: "arrow" | "bookmark" | "calendar" | "
     check: <path d="m5 12 4 4L19 6" />,
     chevron: <path d="m8 10 4 4 4-4" />,
     close: <path d="m6 6 12 12M18 6 6 18" />,
+    comment: <path d="M21 12a8 8 0 0 1-8 8H7l-4 3V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8Z" />,
     compass: <><circle cx="12" cy="12" r="9" /><path d="m15.5 8.5-2.1 4.9-4.9 2.1 2.1-4.9 4.9-2.1Z" /></>,
+    heart: <path d="M12 20s-7-4.4-7-9.3A4.1 4.1 0 0 1 12 7a4.1 4.1 0 0 1 7 3.7c0 4.9-7 9.3-7 9.3Z" />,
     link: <><path d="M10 13a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.1 0l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7" /></>,
     location: <><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2.5" /></>,
     plus: <path d="M12 5v14M5 12h14" />,
@@ -328,7 +365,7 @@ function CreateEventModal({ onClose, onCreated, onToast }: { onClose: () => void
             <label>Event title<input required value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Independence Day MUN" /></label>
             <label>Description<textarea required value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What is happening, who should come, and what to expect?" rows={4} /></label>
             <div className="create-grid">
-              <label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}>{["Music", "Art", "Comedy", "Dance", "Festivals", "Food", "Film", "MUN", "Birthday", "Sports", "Other"].map((item) => <option key={item}>{item}</option>)}</select></label>
+              <label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}>{["Music", "Art", "Comedy", "Dance", "Festivals", "Food", "Film", "MUN", "Birthday", "Sports", "Hackathon", "Other"].map((item) => <option key={item}>{item}</option>)}</select></label>
               <label>Date and time<input required type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} /></label>
             </div>
             <div className="create-grid">
@@ -370,6 +407,10 @@ function App() {
   const [password, setPassword] = useState("")
   const [authError, setAuthError] = useState("")
   const [createOpen, setCreateOpen] = useState(false)
+  const [likeState, setLikeState] = useState({ count: 0, liked: false })
+  const [comments, setComments] = useState<Comment[]>([])
+  const [commentText, setCommentText] = useState("")
+  const sharedOpened = useRef(false)
 
   const location = useUserLocation()
   const searchLocation = location.coordinates ? `${location.coordinates.latitude},${location.coordinates.longitude}` : manualLocation
@@ -434,7 +475,14 @@ function App() {
     supabase.from("saved_events").select("event_key").eq("user_id", session.user.id).then(({ data }) => setSavedIds((data || []).map((row: any) => row.event_key)))
   }, [session])
 
-  const allEvents = useMemo(() => [...userEvents, ...events], [userEvents, events])
+  const allEvents = useMemo(() => [igniteEvent, ...userEvents, ...events], [userEvents, events])
+
+  const hotPicks = useMemo(() => {
+    const now = new Date()
+    const active = allEvents.filter((event) => !event.endsAt || event.endsAt.getTime() > now.getTime())
+    const unique = active.filter((event, index) => active.findIndex((item) => item.id === event.id) === index)
+    return unique.slice(0, 16)
+  }, [allEvents])
 
   const filteredEvents = useMemo(() => allEvents.filter((event) => {
     const matchesCategory = category === "All" || event.category === category
@@ -442,6 +490,51 @@ function App() {
     const matchesSaved = view === "explore" || savedIds.includes(event.id)
     return matchesCategory && matchesDate && matchesSaved
   }), [allEvents, category, dateFilter, savedIds, view])
+
+  useEffect(() => {
+    if (sharedOpened.current || !allEvents.length) return
+    const sharedId = new URLSearchParams(window.location.search).get("event")
+    if (!sharedId) return
+    const found = allEvents.find((event) => event.id === sharedId)
+    if (found) { setSelectedEvent(found); sharedOpened.current = true }
+  }, [allEvents])
+
+  useEffect(() => {
+    if (!selectedEvent) { setLikeState({ count: 0, liked: false }); setComments([]); setCommentText(""); return }
+    let cancelled = false
+    supabase.from("event_likes").select("user_id").eq("event_id", selectedEvent.id).then(({ data }) => {
+      if (cancelled || !data) return
+      setLikeState({ count: data.length, liked: Boolean(session && data.some((row: any) => row.user_id === session.user.id)) })
+    })
+    supabase.from("event_comments").select("id,body,created_at").eq("event_id", selectedEvent.id).order("created_at", { ascending: false }).then(({ data }) => {
+      if (!cancelled) setComments((data || []) as Comment[])
+    })
+    return () => { cancelled = true }
+  }, [selectedEvent?.id, session?.id])
+
+  async function toggleLike(event: AppEvent) {
+    if (!session) { setAuthMode("signin"); setAuthOpen(true); setToast("Sign in to like events"); return }
+    if (likeState.liked) {
+      await supabase.from("event_likes").delete().eq("event_id", event.id).eq("user_id", session.user.id)
+      setLikeState({ count: Math.max(0, likeState.count - 1), liked: false })
+    } else {
+      const { error } = await supabase.from("event_likes").insert({ event_id: event.id, user_id: session.user.id })
+      if (error) { setToast(error.message); return }
+      setLikeState({ count: likeState.count + 1, liked: true })
+    }
+  }
+
+  async function addComment(event: React.FormEvent) {
+    event.preventDefault()
+    if (!session) { setAuthMode("signin"); setAuthOpen(true); setToast("Sign in to ask a question"); return }
+    if (!selectedEvent || !commentText.trim()) return
+    const { error } = await supabase.from("event_comments").insert({ event_id: selectedEvent.id, user_id: session.user.id, body: commentText.trim() })
+    if (error) { setToast(error.message); return }
+    setCommentText("")
+    const { data } = await supabase.from("event_comments").select("id,body,created_at").eq("event_id", selectedEvent.id).order("created_at", { ascending: false })
+    setComments((data || []) as Comment[])
+    setToast("Question posted")
+  }
 
   async function toggleSaved(event: AppEvent) {
     if (!session) { setAuthMode("signin"); setAuthOpen(true); setToast("Sign in to save events"); return }
@@ -475,10 +568,11 @@ function App() {
   }
 
   async function shareEvent(event: AppEvent) {
-    const shareData = { title: event.title, text: `${event.title} at ${event.venue} — ${event.day} ${event.month}, ${event.time}`, url: event.sourceUrl || event.mapsUrl || window.location.href }
+    const url = `${window.location.origin}/?event=${encodeURIComponent(event.id)}`
+    const shareData = { title: event.title, text: `${event.title} on Ventful`, url }
     try {
       if (navigator.share) await navigator.share(shareData)
-      else { await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`); setToast("Event link copied") }
+      else { await navigator.clipboard.writeText(url); setToast("Event link copied") }
     } catch { /* Share sheet closed. */ }
   }
 
@@ -508,7 +602,7 @@ function App() {
               <div className="location-dropdown-heading"><strong>Choose a location</strong><span>Used to find nearby events</span></div>
               <div className="state-picker">
                 <div className="state-options india-states">
-                  {["Bengaluru, India", "Mumbai, India", "Delhi, India", "Chennai, India", "Kolkata, India"].map((place) => <button type="button" key={place} onClick={(event) => { setManualLocation(place); event.currentTarget.closest("details")?.removeAttribute("open") }}>{place}</button>)}
+                  {["Bengaluru, India", "Mumbai, India", "Delhi, India", "Chennai, India", "Kolkata, India", "Hyderabad, India"].map((place) => <button type="button" key={place} onClick={(event) => { setManualLocation(place); event.currentTarget.closest("details")?.removeAttribute("open") }}>{place}</button>)}
                 </div>
               </div>
             </div>
@@ -525,7 +619,8 @@ function App() {
           <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search events, venues or areas" aria-label="Search events" />
           {query && <button type="button" onClick={() => setQuery("")} aria-label="Clear search"><Icon name="close" size={17} /></button>}
         </div>
-        {view === "explore" && <FeaturedEvent events={allEvents} />}
+        {view === "explore" && <HotPicksBoard events={hotPicks} onOpen={setSelectedEvent} />}
+        {view === "explore" && <FeaturedEvent events={hotPicks} />}
         <section className="discover-section">
           <div className="discover-heading">
             <div><p className="eyebrow">{view === "saved" ? "Your shortlist" : "Discover"}</p><h2>{view === "saved" ? "Plans worth keeping" : "Events near you"}</h2></div>
@@ -550,7 +645,21 @@ function App() {
       </nav>
       {authOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setAuthOpen(false)}><section className="event-modal" role="dialog" aria-modal="true"><div className="modal-content"><p className="modal-category">{authMode === "signup" ? "Create account" : "Welcome back"}</p><h2>{authMode === "signup" ? "Sign up for Ventful" : "Sign in to Ventful"}</h2><form onSubmit={handleAuth}><input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email address" /><input type="password" required minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" />{authError && <p className="modal-description">{authError}</p>}<div className="modal-actions"><button className="primary-action" type="submit">{authMode === "signup" ? "Create account" : "Sign in"} <Icon name="arrow" /></button><button type="button" onClick={() => setAuthMode(authMode === "signup" ? "signin" : "signup")}>{authMode === "signup" ? "I have an account" : "Create an account"}</button></div></form></div></section></div>}
       {createOpen && <CreateEventModal onClose={() => setCreateOpen(false)} onCreated={loadUserEvents} onToast={setToast} />}
-      {selectedEvent && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setSelectedEvent(null)}><section className="event-modal" role="dialog" aria-modal="true" aria-labelledby="event-modal-title"><div className="modal-image"><img src={selectedEvent.image} alt="" /><button className="modal-close" type="button" onClick={() => setSelectedEvent(null)} aria-label="Close event details" autoFocus><Icon name="close" /></button><button className={savedIds.includes(selectedEvent.id) ? "save-button is-saved" : "save-button"} type="button" onClick={() => toggleSaved(selectedEvent)} aria-label="Save event"><Icon name={savedIds.includes(selectedEvent.id) ? "check" : "bookmark"} /></button></div><div className="modal-content"><p className="modal-category">{selectedEvent.category}</p><h2 id="event-modal-title">{selectedEvent.title}</h2><div className="modal-facts"><div><Icon name="calendar" /><span><strong>{selectedEvent.weekday}, {selectedEvent.day} {selectedEvent.month}</strong>{selectedEvent.time}{selectedEvent.endTime ? `–${selectedEvent.endTime}` : ""}</span></div><div><Icon name="location" /><span><strong>{selectedEvent.venue}</strong>{selectedEvent.area}</span></div><div><Icon name="ticket" /><span><strong>{selectedEvent.price}</strong>{selectedEvent.isUserPost ? "Community event" : "AI-discovered event"}</span></div></div>{selectedEvent.summary && <p className="modal-description">{selectedEvent.summary}</p>}<p className="modal-description">{selectedEvent.description}</p>{selectedEvent.sources.length > 0 && <div className="modal-actions">{selectedEvent.sources.slice(0, 3).map((source, index) => <a key={source.url} className="primary-action" href={source.url} target="_blank" rel="noreferrer"><Icon name="link" />{source.title || `Source ${index + 1}`}</a>)}</div>}<div className="modal-actions"><a className="primary-action" href={selectedEvent.mapsUrl} target="_blank" rel="noreferrer">Get directions <Icon name="arrow" /></a>{selectedEvent.sourceUrl && <a className="website-action" href={selectedEvent.sourceUrl} target="_blank" rel="noreferrer"><Icon name="link" /><span>Website</span></a>}<button type="button" onClick={() => shareEvent(selectedEvent)}><Icon name="share" /><span>Share</span></button></div></div></section></div>}
+      {selectedEvent && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setSelectedEvent(null)}><section className="event-modal" role="dialog" aria-modal="true" aria-labelledby="event-modal-title"><div className="modal-image"><img src={selectedEvent.image} alt="" /><button className="modal-close" type="button" onClick={() => setSelectedEvent(null)} aria-label="Close event details" autoFocus><Icon name="close" /></button><button className={savedIds.includes(selectedEvent.id) ? "save-button is-saved" : "save-button"} type="button" onClick={() => toggleSaved(selectedEvent)} aria-label="Save event"><Icon name={savedIds.includes(selectedEvent.id) ? "check" : "bookmark"} /></button></div><div className="modal-content"><p className="modal-category">{selectedEvent.category}</p><h2 id="event-modal-title">{selectedEvent.title}</h2><div className="modal-facts"><div><Icon name="calendar" /><span><strong>{selectedEvent.weekday}, {selectedEvent.day} {selectedEvent.month}</strong>{selectedEvent.time}{selectedEvent.endTime ? `–${selectedEvent.endTime}` : ""}</span></div><div><Icon name="location" /><span><strong>{selectedEvent.venue}</strong>{selectedEvent.area}</span></div><div><Icon name="ticket" /><span><strong>{selectedEvent.price}</strong>{selectedEvent.isUserPost ? "Community event" : "AI-discovered event"}</span></div></div>{selectedEvent.summary && <p className="modal-description">{selectedEvent.summary}</p>}<p className="modal-description">{selectedEvent.description}</p>
+          <div className="engagement-row">
+            <button className={likeState.liked ? "like-button liked" : "like-button"} type="button" onClick={() => toggleLike(selectedEvent)}><Icon name="heart" size={18} /><span>{likeState.count}</span></button>
+            <button className="like-button" type="button" onClick={() => shareEvent(selectedEvent)}><Icon name="share" size={18} /><span>Share</span></button>
+          </div>
+          <form className="comment-form" onSubmit={addComment}>
+            <input value={commentText} onChange={(event) => setCommentText(event.target.value)} placeholder="Ask a question about this event…" aria-label="Ask a question" />
+            <button type="submit"><Icon name="comment" size={18} /></button>
+          </form>
+          <div className="comment-list">
+            {comments.length === 0 && <p className="comment-empty">No questions yet. Be the first to ask.</p>}
+            {comments.map((comment) => <article className="comment" key={comment.id}><p>{comment.body}</p><time>{new Date(comment.created_at).toLocaleString()}</time></article>)}
+          </div>
+          {selectedEvent.sources.length > 0 && <div className="modal-actions">{selectedEvent.sources.slice(0, 3).map((source, index) => <a key={source.url} className="primary-action" href={source.url} target="_blank" rel="noreferrer"><Icon name="link" />{source.title || `Source ${index + 1}`}</a>)}</div>}
+          <div className="modal-actions"><a className="primary-action" href={selectedEvent.mapsUrl} target="_blank" rel="noreferrer">Get directions <Icon name="arrow" /></a>{selectedEvent.sourceUrl && <a className="website-action" href={selectedEvent.sourceUrl} target="_blank" rel="noreferrer"><Icon name="link" /><span>Website</span></a>}<button type="button" onClick={() => shareEvent(selectedEvent)}><Icon name="share" /><span>Share</span></button></div></div></section></div>}
       {toast && <div className="toast" role="status"><Icon name="check" size={17} />{toast}</div>}
     </div>
   )

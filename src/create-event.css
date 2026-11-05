@@ -91,6 +91,206 @@
   color: white;
 }
 
+.hot-picks {
+  margin-bottom: 45px;
+}
+
+.hot-picks-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.hot-picks-heading h2 {
+  margin: 0;
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: clamp(32px, 4vw, 48px);
+  font-weight: 650;
+  letter-spacing: -0.05em;
+}
+
+.hot-picks-hint {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.hot-picks-track {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(255px, 300px);
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 12px;
+  scroll-snap-type: x mandatory;
+}
+
+.hot-picks-track::-webkit-scrollbar {
+  height: 8px;
+}
+
+.hot-picks-track::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #c8c0b5;
+}
+
+.hot-pick-card {
+  display: grid;
+  overflow: hidden;
+  border: var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  box-shadow: 3px 3px 0 var(--text);
+  text-align: left;
+  scroll-snap-align: start;
+}
+
+.hot-pick-image-wrap {
+  position: relative;
+  display: block;
+  height: 145px;
+}
+
+.hot-pick-image-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hot-pick-category {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(20, 18, 16, 0.68);
+  color: white;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+}
+
+.hot-pick-live {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: var(--tomato);
+  color: white;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+}
+
+.hot-pick-body {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+}
+
+.hot-pick-body strong {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-size: 18px;
+  line-height: 1.1;
+}
+
+.hot-pick-body > span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.engagement-row {
+  display: flex;
+  gap: 10px;
+  margin: 18px 0;
+}
+
+.like-button {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 15px;
+  border: var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.like-button.liked {
+  border-color: var(--tomato);
+  background: var(--tomato);
+  color: white;
+}
+
+.like-button.liked svg {
+  fill: white;
+}
+
+.comment-form {
+  display: grid;
+  grid-template-columns: 1fr 48px;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.comment-form input {
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid #c8c0b5;
+  border-radius: 7px;
+  background: var(--surface);
+  font-size: 14px;
+}
+
+.comment-form button {
+  display: grid;
+  place-items: center;
+  border: var(--border);
+  border-radius: 7px;
+  background: var(--text);
+  color: white;
+}
+
+.comment-list {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.comment {
+  padding: 13px 15px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbf8f2;
+}
+
+.comment p {
+  margin: 0 0 6px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.comment time {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.comment-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 @media (max-width: 720px) {
   .floating-post-button {
     right: 18px;
@@ -109,5 +309,9 @@
 
   .mobile-nav {
     grid-template-columns: repeat(4, 1fr);
+  }
+
+  .hot-picks-track {
+    grid-auto-columns: minmax(225px, 78vw);
   }
 }
