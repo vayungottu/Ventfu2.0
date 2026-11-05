@@ -1,7 +1,7 @@
 {
-  "name": "Venty — Local events",
-  "short_name": "Venty",
-  "description": "Discover and save the best events happening near you.",
+  "name": "ventful. — Event reels",
+  "short_name": "ventful.",
+  "description": "Swipe through fictional local event reels.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f4efe6",
