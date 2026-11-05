@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "./supabaseClient"
 import { useUserLocation } from "./useUserLocation"
+import "./create-event.css"
 
 type DateFilter = "Any day" | "Today" | "Tomorrow" | "This weekend"
 type AppView = "explore" | "saved"
@@ -23,6 +24,23 @@ type ApiEvent = {
   imageQuery?: string
 }
 
+type DbEvent = {
+  id: string
+  user_id: string
+  title: string
+  description: string
+  category: string
+  area: string
+  address: string
+  starts_at: string
+  image_url: string
+  instagram_url: string
+  maps_url: string
+  external_url: string
+  source: string
+  created_at: string
+}
+
 type AppEvent = {
   id: string
   day: string
@@ -42,7 +60,9 @@ type AppEvent = {
   summary: string
   sourceUrl: string
   sources: ApiSource[]
+  mapsUrl: string
   soon: boolean
+  isUserPost: boolean
 }
 
 interface BeforeInstallPromptEvent extends Event {
@@ -50,7 +70,7 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>
 }
 
-const categories = ["All", "Music", "Art", "Comedy", "Dance", "Festivals", "Food", "Film"]
+const categories = ["All", "Music", "Art", "Comedy", "Dance", "Festivals", "Food", "Film", "MUN", "Birthday", "Sports", "Other"]
 const dateFilters: DateFilter[] = ["Any day", "Today", "Tomorrow", "This weekend"]
 const eventColors = ["#e8452c", "#1f2a5a", "#f1b82d", "#28766a", "#b25488", "#d3633a", "#2d6073"]
 
@@ -83,14 +103,16 @@ function normaliseEvent(raw: ApiEvent, index: number): AppEvent | null {
   if (!raw.title) return null
   const date = formatDate(raw.date)
   const id = `${raw.title}-${raw.date ?? ""}-${raw.venue ?? ""}`.toLowerCase().replace(/[^a-z0-9]+/g, "-")
+  const venue = raw.venue || "Venue to be announced"
+  const area = raw.area || ""
   return {
     id,
     day: date ? String(date.getDate()).padStart(2, "0") : "--",
     weekday: date ? date.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase() : "",
     month: date ? date.toLocaleDateString("en-US", { month: "short" }).toUpperCase() : "",
     title: raw.title,
-    venue: raw.venue || "Venue to be announced",
-    area: raw.area || "",
+    venue,
+    area,
     time: raw.time || "Time TBA",
     endTime: raw.endTime || "",
     category: raw.category || "Event",
@@ -102,11 +124,42 @@ function normaliseEvent(raw: ApiEvent, index: number): AppEvent | null {
     summary: raw.summary || "",
     sourceUrl: raw.sourceUrl || "",
     sources: Array.isArray(raw.sources) ? raw.sources.filter((source) => source?.url) : [],
+    mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${venue}, ${area}`)}`,
     soon: dateGroupFor(date) === "Today",
+    isUserPost: false,
   }
 }
 
-function Icon({ name, size = 20 }: { name: "arrow" | "bookmark" | "calendar" | "check" | "chevron" | "close" | "compass" | "link" | "location" | "search" | "share" | "ticket"; size?: number }) {
+function userEventToAppEvent(row: DbEvent, index: number): AppEvent {
+  const date = new Date(row.starts_at)
+  const validDate = !Number.isNaN(date.getTime()) ? date : null
+  const venue = row.address || "Venue to be announced"
+  return {
+    id: row.id,
+    day: validDate ? String(validDate.getDate()).padStart(2, "0") : "--",
+    weekday: validDate ? validDate.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase() : "",
+    month: validDate ? validDate.toLocaleDateString("en-US", { month: "short" }).toUpperCase() : "",
+    title: row.title,
+    venue,
+    area: row.area,
+    time: validDate ? validDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "Time TBA",
+    endTime: "",
+    category: row.category || "Event",
+    image: row.image_url || placeholderImage(row.title),
+    color: eventColors[index % eventColors.length],
+    dateGroup: dateGroupFor(validDate),
+    price: "Free / see details",
+    description: row.description || "No description provided.",
+    summary: "",
+    sourceUrl: row.external_url || row.instagram_url || "",
+    sources: [],
+    mapsUrl: row.maps_url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${venue}, ${row.area}`)}`,
+    soon: dateGroupFor(validDate) === "Today",
+    isUserPost: true,
+  }
+}
+
+function Icon({ name, size = 20 }: { name: "arrow" | "bookmark" | "calendar" | "check" | "chevron" | "close" | "compass" | "link" | "location" | "plus" | "search" | "share" | "ticket"; size?: number }) {
   const paths = {
     arrow: <path d="M5 12h14M13 6l6 6-6 6" />,
     bookmark: <path d="M6 4.8A1.8 1.8 0 0 1 7.8 3h8.4A1.8 1.8 0 0 1 18 4.8V21l-6-4-6 4V4.8Z" />,
@@ -117,6 +170,7 @@ function Icon({ name, size = 20 }: { name: "arrow" | "bookmark" | "calendar" | "
     compass: <><circle cx="12" cy="12" r="9" /><path d="m15.5 8.5-2.1 4.9-4.9 2.1 2.1-4.9 4.9-2.1Z" /></>,
     link: <><path d="M10 13a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.1 0l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7" /></>,
     location: <><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2.5" /></>,
+    plus: <path d="M12 5v14M5 12h14" />,
     search: <path d="m21 21-4.35-4.35M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z" />,
     share: <><circle cx="18" cy="5" r="2.5" /><circle cx="6" cy="12" r="2.5" /><circle cx="18" cy="19" r="2.5" /><path d="m8.2 10.8 7.6-4.5M8.2 13.2l7.6 4.5" /></>,
     ticket: <path d="M3 8.5V5h18v3.5a3.5 3.5 0 0 0 0 7V19H3v-3.5a3.5 3.5 0 0 0 0-7ZM13 8v8" />,
@@ -131,7 +185,8 @@ function EventCard({ event, isSaved, onOpen, onSave }: { event: AppEvent; isSave
       <div className="event-image-wrap">
         <img src={event.image} alt="" className="event-image" />
         <span className="card-category">{event.category}</span>
-        {event.soon && <span className="soon-tag">Happening today</span>}
+        {event.isUserPost && <span className="soon-tag">Community post</span>}
+        {!event.isUserPost && event.soon && <span className="soon-tag">Happening today</span>}
         <button className={isSaved ? "save-button is-saved" : "save-button"} type="button" onClick={(clickEvent) => { clickEvent.stopPropagation(); onSave() }} aria-label={isSaved ? `Remove ${event.title} from saved` : `Save ${event.title}`}>
           <Icon name={isSaved ? "check" : "bookmark"} />
         </button>
@@ -182,7 +237,7 @@ function FeaturedEvent({ events }: { events: AppEvent[] }) {
                 <div className="carousel-date"><strong>{event.day}</strong><span>{event.month}</span></div>
                 <div><strong>{event.time}</strong><span><Icon name="location" size={16} />{event.venue}{event.area ? `, ${event.area}` : ""}</span></div>
               </div>
-              <button className="carousel-action" type="button" disabled={activeSlide !== index} onClick={() => window.open(event.sourceUrl || `https://www.google.com/search?q=${encodeURIComponent(event.title)}`, "_blank", "noopener")}>
+              <button className="carousel-action" type="button" disabled={activeSlide !== index} onClick={() => window.open(event.sourceUrl || event.mapsUrl, "_blank", "noopener")}>
                 View event <Icon name="arrow" />
               </button>
             </div>
@@ -207,12 +262,100 @@ function FeaturedEvent({ events }: { events: AppEvent[] }) {
   )
 }
 
+function CreateEventModal({ onClose, onCreated, onToast }: { onClose: () => void; onCreated: () => void; onToast: (message: string) => void }) {
+  const [title, setTitle] = useState("")
+  const [description, setDescription] = useState("")
+  const [category, setCategory] = useState("Other")
+  const [address, setAddress] = useState("")
+  const [area, setArea] = useState("")
+  const [startsAt, setStartsAt] = useState("")
+  const [website, setWebsite] = useState("")
+  const [photo, setPhoto] = useState<File | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault()
+    setError("")
+    setSaving(true)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const user = sessionData.session?.user
+      if (!user) throw new Error("Please sign in to post an event")
+
+      let imageUrl = ""
+      if (photo) {
+        const path = `${user.id}/${Date.now()}-${photo.name.replace(/[^a-zA-Z0-9.-]/g, "-")}`
+        const { error: uploadError } = await supabase.storage.from("event-photos").upload(path, photo, { cacheControl: "3600", upsert: false })
+        if (uploadError) throw uploadError
+        const { data } = supabase.storage.from("event-photos").getPublicUrl(path)
+        imageUrl = data.publicUrl
+      }
+
+      const { error: insertError } = await supabase.from("events").insert({
+        user_id: user.id,
+        title,
+        description,
+        category,
+        address,
+        area,
+        starts_at: new Date(startsAt).toISOString(),
+        image_url: imageUrl,
+        external_url: website,
+        maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${address}, ${area}`)}`,
+        source: "user",
+        status: "approved",
+      })
+      if (insertError) throw insertError
+
+      onToast("Event posted")
+      onCreated()
+      onClose()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not post event")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && onClose()}>
+      <section className="event-modal create-event-modal" role="dialog" aria-modal="true" aria-labelledby="create-event-title">
+        <div className="modal-content">
+          <p className="modal-category">Post an event</p>
+          <h2 id="create-event-title">Share something happening</h2>
+          <form className="create-form" onSubmit={submit}>
+            <label>Event title<input required value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Independence Day MUN" /></label>
+            <label>Description<textarea required value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What is happening, who should come, and what to expect?" rows={4} /></label>
+            <div className="create-grid">
+              <label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}>{["Music", "Art", "Comedy", "Dance", "Festivals", "Food", "Film", "MUN", "Birthday", "Sports", "Other"].map((item) => <option key={item}>{item}</option>)}</select></label>
+              <label>Date and time<input required type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} /></label>
+            </div>
+            <div className="create-grid">
+              <label>Venue / address<input required value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Cubbon Park" /></label>
+              <label>Area / city<input required value={area} onChange={(event) => setArea(event.target.value)} placeholder="Bengaluru" /></label>
+            </div>
+            <label>Event website or sign-up link<input type="url" value={website} onChange={(event) => setWebsite(event.target.value)} placeholder="https://example.com" /></label>
+            <label>One photo (optional)<input type="file" accept="image/*" onChange={(event) => setPhoto(event.target.files?.[0] || null)} /></label>
+            {error && <p className="modal-description create-error">{error}</p>}
+            <div className="modal-actions create-actions">
+              <button className="primary-action" type="submit" disabled={saving}>{saving ? "Posting…" : "Post event"} <Icon name="arrow" /></button>
+              <button type="button" onClick={onClose}>Cancel</button>
+            </div>
+          </form>
+        </div>
+      </section>
+    </div>
+  )
+}
+
 function App() {
   const [view, setView] = useState<AppView>("explore")
   const [query, setQuery] = useState("")
   const [category, setCategory] = useState("All")
   const [dateFilter, setDateFilter] = useState<DateFilter>("Any day")
   const [events, setEvents] = useState<AppEvent[]>([])
+  const [userEvents, setUserEvents] = useState<AppEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [savedIds, setSavedIds] = useState<string[]>([])
@@ -226,6 +369,7 @@ function App() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [authError, setAuthError] = useState("")
+  const [createOpen, setCreateOpen] = useState(false)
 
   const location = useUserLocation()
   const searchLocation = location.coordinates ? `${location.coordinates.latitude},${location.coordinates.longitude}` : manualLocation
@@ -243,12 +387,12 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (!selectedEvent) return
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setSelectedEvent(null) }
+    if (!selectedEvent && !createOpen) return
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") { setSelectedEvent(null); setCreateOpen(false) } }
     document.body.classList.add("modal-open")
     window.addEventListener("keydown", onKeyDown)
     return () => { document.body.classList.remove("modal-open"); window.removeEventListener("keydown", onKeyDown) }
-  }, [selectedEvent])
+  }, [selectedEvent, createOpen])
 
   useEffect(() => {
     if (!toast) return
@@ -278,17 +422,26 @@ function App() {
     return () => { cancelled = true; window.clearTimeout(timeout) }
   }, [query, searchLocation])
 
+  async function loadUserEvents() {
+    const { data } = await supabase.from("events").select("*").eq("status", "approved").order("created_at", { ascending: false }).limit(50)
+    setUserEvents((data || []).map(userEventToAppEvent))
+  }
+
+  useEffect(() => { loadUserEvents() }, [])
+
   useEffect(() => {
     if (!session) { setSavedIds([]); return }
     supabase.from("saved_events").select("event_key").eq("user_id", session.user.id).then(({ data }) => setSavedIds((data || []).map((row: any) => row.event_key)))
   }, [session])
 
-  const filteredEvents = useMemo(() => events.filter((event) => {
+  const allEvents = useMemo(() => [...userEvents, ...events], [userEvents, events])
+
+  const filteredEvents = useMemo(() => allEvents.filter((event) => {
     const matchesCategory = category === "All" || event.category === category
     const matchesDate = dateFilter === "Any day" || event.dateGroup === dateFilter
     const matchesSaved = view === "explore" || savedIds.includes(event.id)
     return matchesCategory && matchesDate && matchesSaved
-  }), [category, dateFilter, events, savedIds, view])
+  }), [allEvents, category, dateFilter, savedIds, view])
 
   async function toggleSaved(event: AppEvent) {
     if (!session) { setAuthMode("signin"); setAuthOpen(true); setToast("Sign in to save events"); return }
@@ -322,11 +475,16 @@ function App() {
   }
 
   async function shareEvent(event: AppEvent) {
-    const shareData = { title: event.title, text: `${event.title} at ${event.venue} — ${event.day} ${event.month}, ${event.time}`, url: event.sourceUrl || window.location.href }
+    const shareData = { title: event.title, text: `${event.title} at ${event.venue} — ${event.day} ${event.month}, ${event.time}`, url: event.sourceUrl || event.mapsUrl || window.location.href }
     try {
       if (navigator.share) await navigator.share(shareData)
       else { await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`); setToast("Event link copied") }
     } catch { /* Share sheet closed. */ }
+  }
+
+  function openCreate() {
+    if (!session) { setAuthMode("signin"); setAuthOpen(true); setToast("Sign in to post an event"); return }
+    setCreateOpen(true)
   }
 
   return (
@@ -367,7 +525,7 @@ function App() {
           <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search events, venues or areas" aria-label="Search events" />
           {query && <button type="button" onClick={() => setQuery("")} aria-label="Clear search"><Icon name="close" size={17} /></button>}
         </div>
-        {view === "explore" && <FeaturedEvent events={events} />}
+        {view === "explore" && <FeaturedEvent events={allEvents} />}
         <section className="discover-section">
           <div className="discover-heading">
             <div><p className="eyebrow">{view === "saved" ? "Your shortlist" : "Discover"}</p><h2>{view === "saved" ? "Plans worth keeping" : "Events near you"}</h2></div>
@@ -383,13 +541,16 @@ function App() {
           {!error && !loading && filteredEvents.length === 0 && <div className="empty-state"><span><Icon name={view === "saved" ? "bookmark" : "search"} size={28} /></span><h3>{view === "saved" ? "No saved events yet" : "No events found"}</h3><p>Try another search, date, category, or location.</p></div>}
         </section>
       </main>
+      <button className="floating-post-button" type="button" onClick={openCreate} aria-label="Post an event"><Icon name="plus" size={26} /></button>
       <nav className="mobile-nav" aria-label="Mobile navigation">
         <button type="button" className={view === "explore" ? "active" : ""} onClick={() => setView("explore")}><Icon name="compass" /><span>Explore</span></button>
+        <button type="button" onClick={openCreate}><span className="mobile-post-icon"><Icon name="plus" /></span><span>Post</span></button>
         <button type="button" className={view === "saved" ? "active" : ""} onClick={() => setView("saved")}><span className="mobile-save-icon"><Icon name="bookmark" />{savedIds.length > 0 && <small>{savedIds.length}</small>}</span><span>Saved</span></button>
         <button type="button" onClick={location.request}><Icon name="location" /><span>Near me</span></button>
       </nav>
       {authOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setAuthOpen(false)}><section className="event-modal" role="dialog" aria-modal="true"><div className="modal-content"><p className="modal-category">{authMode === "signup" ? "Create account" : "Welcome back"}</p><h2>{authMode === "signup" ? "Sign up for Ventful" : "Sign in to Ventful"}</h2><form onSubmit={handleAuth}><input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email address" /><input type="password" required minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" />{authError && <p className="modal-description">{authError}</p>}<div className="modal-actions"><button className="primary-action" type="submit">{authMode === "signup" ? "Create account" : "Sign in"} <Icon name="arrow" /></button><button type="button" onClick={() => setAuthMode(authMode === "signup" ? "signin" : "signup")}>{authMode === "signup" ? "I have an account" : "Create an account"}</button></div></form></div></section></div>}
-      {selectedEvent && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setSelectedEvent(null)}><section className="event-modal" role="dialog" aria-modal="true" aria-labelledby="event-modal-title"><div className="modal-image"><img src={selectedEvent.image} alt="" /><button className="modal-close" type="button" onClick={() => setSelectedEvent(null)} aria-label="Close event details" autoFocus><Icon name="close" /></button><button className={savedIds.includes(selectedEvent.id) ? "save-button is-saved" : "save-button"} type="button" onClick={() => toggleSaved(selectedEvent)} aria-label="Save event"><Icon name={savedIds.includes(selectedEvent.id) ? "check" : "bookmark"} /></button></div><div className="modal-content"><p className="modal-category">{selectedEvent.category}</p><h2 id="event-modal-title">{selectedEvent.title}</h2><div className="modal-facts"><div><Icon name="calendar" /><span><strong>{selectedEvent.weekday}, {selectedEvent.day} {selectedEvent.month}</strong>{selectedEvent.time}{selectedEvent.endTime ? `–${selectedEvent.endTime}` : ""}</span></div><div><Icon name="location" /><span><strong>{selectedEvent.venue}</strong>{selectedEvent.area}</span></div><div><Icon name="ticket" /><span><strong>{selectedEvent.price}</strong>AI-discovered event</span></div></div>{selectedEvent.summary && <p className="modal-description">{selectedEvent.summary}</p>}<p className="modal-description">{selectedEvent.description}</p>{selectedEvent.sources.length > 0 && <div className="modal-actions">{selectedEvent.sources.slice(0, 3).map((source, index) => <a key={source.url} className="primary-action" href={source.url} target="_blank" rel="noreferrer"><Icon name="link" />{source.title || `Source ${index + 1}`}</a>)}</div>}<div className="modal-actions"><a className="primary-action" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${selectedEvent.venue}, ${selectedEvent.area}`)}`} target="_blank" rel="noreferrer">Get directions <Icon name="arrow" /></a><button type="button" onClick={() => shareEvent(selectedEvent)}><Icon name="share" /><span>Share</span></button></div></div></section></div>}
+      {createOpen && <CreateEventModal onClose={() => setCreateOpen(false)} onCreated={loadUserEvents} onToast={setToast} />}
+      {selectedEvent && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setSelectedEvent(null)}><section className="event-modal" role="dialog" aria-modal="true" aria-labelledby="event-modal-title"><div className="modal-image"><img src={selectedEvent.image} alt="" /><button className="modal-close" type="button" onClick={() => setSelectedEvent(null)} aria-label="Close event details" autoFocus><Icon name="close" /></button><button className={savedIds.includes(selectedEvent.id) ? "save-button is-saved" : "save-button"} type="button" onClick={() => toggleSaved(selectedEvent)} aria-label="Save event"><Icon name={savedIds.includes(selectedEvent.id) ? "check" : "bookmark"} /></button></div><div className="modal-content"><p className="modal-category">{selectedEvent.category}</p><h2 id="event-modal-title">{selectedEvent.title}</h2><div className="modal-facts"><div><Icon name="calendar" /><span><strong>{selectedEvent.weekday}, {selectedEvent.day} {selectedEvent.month}</strong>{selectedEvent.time}{selectedEvent.endTime ? `–${selectedEvent.endTime}` : ""}</span></div><div><Icon name="location" /><span><strong>{selectedEvent.venue}</strong>{selectedEvent.area}</span></div><div><Icon name="ticket" /><span><strong>{selectedEvent.price}</strong>{selectedEvent.isUserPost ? "Community event" : "AI-discovered event"}</span></div></div>{selectedEvent.summary && <p className="modal-description">{selectedEvent.summary}</p>}<p className="modal-description">{selectedEvent.description}</p>{selectedEvent.sources.length > 0 && <div className="modal-actions">{selectedEvent.sources.slice(0, 3).map((source, index) => <a key={source.url} className="primary-action" href={source.url} target="_blank" rel="noreferrer"><Icon name="link" />{source.title || `Source ${index + 1}`}</a>)}</div>}<div className="modal-actions"><a className="primary-action" href={selectedEvent.mapsUrl} target="_blank" rel="noreferrer">Get directions <Icon name="arrow" /></a>{selectedEvent.sourceUrl && <a className="website-action" href={selectedEvent.sourceUrl} target="_blank" rel="noreferrer"><Icon name="link" /><span>Website</span></a>}<button type="button" onClick={() => shareEvent(selectedEvent)}><Icon name="share" /><span>Share</span></button></div></div></section></div>}
       {toast && <div className="toast" role="status"><Icon name="check" size={17} />{toast}</div>}
     </div>
   )
