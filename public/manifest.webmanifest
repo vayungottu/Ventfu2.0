@@ -1,0 +1,18 @@
+{
+  "name": "Venty — Local events",
+  "short_name": "Venty",
+  "description": "Discover and save the best events happening near you.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4efe6",
+  "theme_color": "#f4efe6",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
