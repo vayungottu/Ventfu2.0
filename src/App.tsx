@@ -1,124 +1,216 @@
-import { FormEvent, useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
-type ReelEvent = {
+type DateFilter = "Any day" | "Today" | "Tomorrow" | "This weekend"
+type AppView = "explore" | "saved"
+
+type VentyEvent = {
   id: number
+  day: string
+  weekday: string
+  month: string
   title: string
-  category: string
-  date: string
-  time: string
   venue: string
-  city: string
-  price: string
-  caption: string
-  organizer: string
-  initials: string
+  area: string
+  time: string
+  endTime: string
+  category: string
   image: string
-  imagePosition?: string
-  likes: number
-  comments: number
+  color: string
+  dateGroup: Exclude<DateFilter, "Any day">
+  price: string
+  description: string
+  featured?: boolean
+  soon?: boolean
 }
 
-const reels: ReelEvent[] = [
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>
+}
+
+const events: VentyEvent[] = [
   {
     id: 1,
-    title: "Neon After Dark",
-    category: "Rooftop party",
-    date: "Fri 20 Nov",
-    time: "8 PM",
-    venue: "Skyline Roof",
-    city: "London",
-    price: "£18",
-    caption:
-      "City lights, low ceilings and a DJ set that runs well past midnight.",
-    organizer: "Night People",
-    initials: "NP",
+    day: "24",
+    weekday: "SAT",
+    month: "MAY",
+    title: "Night Shift: Live at the Foundry",
+    venue: "The Foundry",
+    area: "Shoreditch",
+    time: "8:00 PM",
+    endTime: "11:30 PM",
+    category: "Music",
     image:
-      "https://images.unsplash.com/photo-1545128485-c400e7702796?auto=format&fit=crop&w=1200&q=88",
-    imagePosition: "55% center",
-    likes: 2841,
-    comments: 186,
+      "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1400&q=85",
+    color: "#e8452c",
+    dateGroup: "Today",
+    price: "From £14",
+    description:
+      "A late-night lineup of new voices, sharp guitars and room-shaking sets inside one of East London's best independent venues.",
+    featured: true,
+    soon: true,
   },
   {
     id: 2,
-    title: "Canvas & Cocktails",
-    category: "Art night",
-    date: "Sat 21 Nov",
-    time: "6 PM",
-    venue: "Studio Nine",
-    city: "London",
-    price: "£12",
-    caption:
-      "Paint something bold, meet somebody new, leave with a canvas under your arm.",
-    organizer: "Studio Nine",
-    initials: "S9",
+    day: "25",
+    weekday: "SUN",
+    month: "MAY",
+    title: "After Hours: Studio Sessions",
+    venue: "The Yard",
+    area: "Hackney",
+    time: "7:30 PM",
+    endTime: "10:30 PM",
+    category: "Music",
     image:
-      "https://images.unsplash.com/photo-1526389157-6a5cc2bb4afa?auto=format&fit=crop&w=1200&q=88",
-    imagePosition: "center center",
-    likes: 1704,
-    comments: 92,
+      "https://images.unsplash.com/photo-1603910234616-3b5f4a6be2b4?auto=format&fit=crop&w=1200&q=85",
+    color: "#1f2a5a",
+    dateGroup: "Tomorrow",
+    price: "£12",
+    description:
+      "An intimate live session pairing emerging artists with stripped-back production, followed by a relaxed courtyard DJ set.",
   },
   {
     id: 3,
-    title: "Midnight Bites",
-    category: "Street food",
-    date: "Sat 21 Nov",
-    time: "7 PM",
-    venue: "East Yard",
-    city: "London",
-    price: "Free",
-    caption:
-      "Open flames, secret menus and the best late-night plates in the east.",
-    organizer: "East Yard Social",
-    initials: "EY",
+    day: "27",
+    weekday: "TUE",
+    month: "MAY",
+    title: "Open Studio: New Forms",
+    venue: "Unit 14",
+    area: "Peckham",
+    time: "6:00 PM",
+    endTime: "9:00 PM",
+    category: "Art",
     image:
-      "https://images.unsplash.com/photo-1552538962-40822613a09d?auto=format&fit=crop&w=1200&q=88",
-    imagePosition: "center center",
-    likes: 3926,
-    comments: 247,
+      "https://images.unsplash.com/photo-1559228461-4fa1e7eb677c?auto=format&fit=crop&w=1200&q=85",
+    color: "#f1b82d",
+    dateGroup: "This weekend",
+    price: "Free",
+    description:
+      "Meet local makers, explore new installations and see works in progress across three floors of independent studios.",
   },
   {
     id: 4,
-    title: "Sunday Unplugged",
-    category: "Acoustic gig",
-    date: "Sun 22 Nov",
-    time: "5 PM",
+    day: "28",
+    weekday: "WED",
+    month: "MAY",
+    title: "Punchline Social Club",
     venue: "The Green Room",
-    city: "London",
-    price: "£10",
-    caption:
-      "Three songwriters, warm lamps and a room quiet enough to hear every word.",
-    organizer: "Green Room Live",
-    initials: "GR",
+    area: "Camden",
+    time: "8:30 PM",
+    endTime: "10:30 PM",
+    category: "Comedy",
     image:
-      "https://images.unsplash.com/photo-1536594527669-2f555de54e95?auto=format&fit=crop&w=1200&q=88",
-    imagePosition: "58% center",
-    likes: 2158,
-    comments: 134,
+      "https://images.unsplash.com/photo-1470229538611-16ba8c7ffbd7?auto=format&fit=crop&w=1200&q=85",
+    color: "#28766a",
+    dateGroup: "This weekend",
+    price: "£9",
+    description:
+      "A fast, friendly night of stand-up with six rising comics, one seasoned host and no awkward front-row ambushes.",
   },
-]
-
-const sampleComments = [
   {
-    name: "Maya R.",
-    text: "This is exactly what I needed this weekend.",
-    initials: "MR",
+    id: 5,
+    day: "30",
+    weekday: "FRI",
+    month: "MAY",
+    title: "Rhythm Section: Rooftop",
+    venue: "Atlas House",
+    area: "Dalston",
+    time: "5:00 PM",
+    endTime: "11:00 PM",
+    category: "Dance",
+    image:
+      "https://images.unsplash.com/photo-1619229725920-ac8b63b0631a?auto=format&fit=crop&w=1200&q=85",
+    color: "#b25488",
+    dateGroup: "This weekend",
+    price: "From £18",
+    description:
+      "Sunset selections, warm house and left-field dance music on a rooftop made for long evenings with friends.",
   },
-  { name: "Jon Bell", text: "Who else is going?", initials: "JB" },
-  { name: "Imani K.", text: "Saved. See you there.", initials: "IK" },
+  {
+    id: 6,
+    day: "31",
+    weekday: "SAT",
+    month: "MAY",
+    title: "Loud / Quiet: All Day Festival",
+    venue: "Electric Park",
+    area: "Brixton",
+    time: "2:00 PM",
+    endTime: "11:00 PM",
+    category: "Festivals",
+    image:
+      "https://images.unsplash.com/photo-1583795484071-3c453e3a7c71?auto=format&fit=crop&w=1200&q=85",
+    color: "#e8452c",
+    dateGroup: "This weekend",
+    price: "£28",
+    description:
+      "A full day of live music, independent food, print stalls and after-dark performances across two outdoor stages.",
+  },
+  {
+    id: 7,
+    day: "01",
+    weekday: "SUN",
+    month: "JUN",
+    title: "The Long Table: Summer Supper",
+    venue: "Glasshouse Garden",
+    area: "Bethnal Green",
+    time: "6:30 PM",
+    endTime: "9:30 PM",
+    category: "Food",
+    image:
+      "https://images.unsplash.com/photo-1567942712661-82b9b407abbf?auto=format&fit=crop&w=1200&q=85",
+    color: "#d3633a",
+    dateGroup: "This weekend",
+    price: "£35",
+    description:
+      "A generous seasonal menu served family-style in a candlelit greenhouse, with natural wine and live acoustic music.",
+  },
+  {
+    id: 8,
+    day: "02",
+    weekday: "MON",
+    month: "JUN",
+    title: "Cinema Under the Arches",
+    venue: "Rye Lane Arches",
+    area: "Peckham",
+    time: "7:00 PM",
+    endTime: "10:00 PM",
+    category: "Film",
+    image:
+      "https://images.unsplash.com/photo-1450044804117-534ccd6e6a3a?auto=format&fit=crop&w=1200&q=85",
+    color: "#2d6073",
+    dateGroup: "This weekend",
+    price: "£11",
+    description:
+      "Cult cinema on a huge screen beneath the railway arches, complete with beanbags, local drinks and a short-film opener.",
+  },
 ]
 
-type IconName = "bookmark" | "calendar" | "chevron" | "close" | "comment" | "heart" | "link" | "location" | "mute" | "pause" | "play" | "send" | "share" | "ticket" | "volume"
+const categories = [
+  "All",
+  "Music",
+  "Art",
+  "Comedy",
+  "Dance",
+  "Festivals",
+  "Food",
+  "Film",
+]
+const dateFilters: DateFilter[] = [
+  "Any day",
+  "Today",
+  "Tomorrow",
+  "This weekend",
+]
 
 function Icon({
   name,
-  filled = false,
-  size = 24,
+  size = 20,
 }: {
-  name: IconName
-  filled?: boolean
+  name: "arrow" | "bookmark" | "calendar" | "check" | "chevron" | "close" | "compass" | "location" | "search" | "share" | "ticket"
   size?: number
 }) {
-  const paths: Record<IconName, React.ReactNode> = {
+  const paths = {
+    arrow: <path d="M5 12h14M13 6l6 6-6 6" />,
     bookmark: (
       <path d="M6 4.8A1.8 1.8 0 0 1 7.8 3h8.4A1.8 1.8 0 0 1 18 4.8V21l-6-4-6 4V4.8Z" />
     ),
@@ -128,18 +220,13 @@ function Icon({
         <path d="M16 3v4M8 3v4M3 10h18" />
       </>
     ),
-    chevron: <path d="m7 14 5-5 5 5" />,
+    check: <path d="m5 12 4 4L19 6" />,
+    chevron: <path d="m8 10 4 4 4-4" />,
     close: <path d="m6 6 12 12M18 6 6 18" />,
-    comment: (
-      <path d="M21 11.5a8.4 8.4 0 0 1-9 8.5 9.7 9.7 0 0 1-3.7-.8L3 21l1.7-5A8.5 8.5 0 1 1 21 11.5Z" />
-    ),
-    heart: (
-      <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z" />
-    ),
-    link: (
+    compass: (
       <>
-        <path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.2 1.2" />
-        <path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.2-1.2" />
+        <circle cx="12" cy="12" r="9" />
+        <path d="m15.5 8.5-2.1 4.9-4.9 2.1 2.1-4.9 4.9-2.1Z" />
       </>
     ),
     location: (
@@ -148,19 +235,7 @@ function Icon({
         <circle cx="12" cy="10" r="2.5" />
       </>
     ),
-    mute: (
-      <>
-        <path d="M11 5 6 9H3v6h3l5 4V5Z" />
-        <path d="m18 9-5 6M13 9l5 6" />
-      </>
-    ),
-    pause: (
-      <>
-        <path d="M8 5v14M16 5v14" />
-      </>
-    ),
-    play: <path d="m8 5 11 7-11 7V5Z" />,
-    send: <path d="m22 2-7 20-4-9-9-4 20-7ZM11 13l4-4" />,
+    search: <path d="m21 21-4.35-4.35M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z" />,
     share: (
       <>
         <circle cx="18" cy="5" r="2.5" />
@@ -172,12 +247,6 @@ function Icon({
     ticket: (
       <path d="M3 8.5V5h18v3.5a3.5 3.5 0 0 0 0 7V19H3v-3.5a3.5 3.5 0 0 0 0-7ZM13 8v8" />
     ),
-    volume: (
-      <>
-        <path d="M11 5 6 9H3v6h3l5 4V5Z" />
-        <path d="M15.5 8.5a5 5 0 0 1 0 7M18 6a8.5 8.5 0 0 1 0 12" />
-      </>
-    ),
   }
 
   return (
@@ -185,465 +254,843 @@ function Icon({
       viewBox="0 0 24 24"
       aria-hidden="true"
       style={{ width: size, height: size }}
-      className={filled ? "icon-filled" : ""}
     >
       {paths[name]}
     </svg>
   )
 }
 
-function formatCount(count: number) {
-  return count >= 1000
-    ? `${(count / 1000).toFixed(1).replace(".0", "")}K`
-    : String(count)
+function EventCard({
+  event,
+  isSaved,
+  onOpen,
+  onSave,
+}: {
+  event: VentyEvent
+  isSaved: boolean
+  onOpen: () => void
+  onSave: () => void
+}) {
+  return (
+    <article className="event-card">
+      <button
+        className="card-hit-area"
+        type="button"
+        onClick={onOpen}
+        aria-label={`View ${event.title}`}
+      />
+      <div className="event-image-wrap">
+        <img src={event.image} alt="" className="event-image" />
+        <span className="card-category">{event.category}</span>
+        {event.soon && <span className="soon-tag">Happening today</span>}
+        <button
+          className={isSaved ? "save-button is-saved" : "save-button"}
+          type="button"
+          onClick={(clickEvent) => {
+            clickEvent.stopPropagation()
+            onSave()
+          }}
+          aria-label={
+            isSaved ? `Remove ${event.title} from saved` : `Save ${event.title}`
+          }
+        >
+          <Icon name={isSaved ? "check" : "bookmark"} />
+        </button>
+      </div>
+      <div className="event-card-body">
+        <div className="compact-date" style={{ background: event.color }}>
+          <small>{event.weekday}</small>
+          <strong>{event.day}</strong>
+          <small>{event.month}</small>
+        </div>
+        <div className="event-card-copy">
+          <p>
+            {event.time} · {event.price}
+          </p>
+          <h3>{event.title}</h3>
+          <span className="card-location">
+            <Icon name="location" size={15} />
+            {event.venue}, {event.area}
+          </span>
+        </div>
+      </div>
+    </article>
+  )
 }
 
-export default function App() {
-  const reelScroller = useRef<HTMLDivElement>(null)
-  const reelNodes = useRef<Array<HTMLElement | null>>([])
-  const [activeIndex, setActiveIndex] = useState(0)
-  const [playing, setPlaying] = useState(true)
-  const [muted, setMuted] = useState(true)
-  const [progress, setProgress] = useState(0)
-  const [liked, setLiked] = useState<number[]>([])
-  const [saved, setSaved] = useState<number[]>([])
-  const [following, setFollowing] = useState<string[]>([])
-  const [commentEvent, setCommentEvent] = useState<ReelEvent | null>(null)
-  const [shareEvent, setShareEvent] = useState<ReelEvent | null>(null)
-  const [comment, setComment] = useState("")
-  const [postedComments, setPostedComments] =
-    useState<Record<number, string[]>>({})
-  const [toast, setToast] = useState("")
+function FeaturedEvent(_props: {
+  event: VentyEvent
+  isSaved: boolean
+  onOpen: () => void
+  onSave: () => void
+}) {
+  const slides = [
+    {
+      name: "Carousel / Slide 1",
+      title: "Venty Hack Weekend",
+      category: "Hackathon",
+      date: "14",
+      month: "NOV",
+      time: "9:00 AM",
+      location: "Indiranagar, Bengaluru",
+      description: "Build something ridiculous in 36 hours.",
+      action: "Get tickets",
+      posterTop: "36 HOURS",
+      posterBottom: "HACK / BUILD / BREAK",
+      theme: "hack",
+      soon: true,
+    },
+    {
+      name: "Carousel / Slide 2",
+      title: "Midnight Ramen Pop-up",
+      category: "Food",
+      date: "16",
+      month: "NOV",
+      time: "11:30 PM",
+      location: "Koramangala, Bengaluru",
+      description: "Late-night bowls, limited seats.",
+      action: "Get tickets",
+      posterTop: "NOODLES",
+      posterBottom: "UNTIL SOLD OUT",
+      theme: "ramen",
+    },
+    {
+      name: "Carousel / Slide 3",
+      title: "Model UN: Bengaluru Summit",
+      category: "MUN",
+      date: "18",
+      month: "NOV",
+      time: "8:30 AM",
+      location: "Cubbon Park area, Bengaluru",
+      description: "Two days of debate, diplomacy and questionable formalwear.",
+      action: "View event",
+      posterTop: "SPEAK / OBJECT",
+      posterBottom: "DIPLOMACY, MOSTLY",
+      theme: "mun",
+    },
+    {
+      name: "Carousel / Slide 4",
+      title: "Basement Indie Night",
+      category: "Live music",
+      date: "21",
+      month: "NOV",
+      time: "8:00 PM",
+      location: "Church Street, Bengaluru",
+      description: "Three local bands, one very small room.",
+      action: "Get tickets",
+      posterTop: "LOUD ENOUGH?",
+      posterBottom: "3 BANDS / 1 ROOM",
+      theme: "indie",
+    },
+  ]
+  const [activeSlide, setActiveSlide] = useState(0)
+  const [ticketMessage, setTicketMessage] = useState("")
 
   useEffect(() => {
-    if (!playing) return
-    const timer = window.setInterval(() => {
-      setProgress((current) => (current >= 100 ? 0 : current + 0.4))
-    }, 100)
-    return () => window.clearInterval(timer)
-  }, [activeIndex, playing])
+    const timeout = window.setTimeout(() => {
+      setActiveSlide((current) => (current + 1) % slides.length)
+      setTicketMessage("")
+    }, 5000)
 
-  useEffect(() => {
-    setProgress(0)
-    setPlaying(true)
-  }, [activeIndex])
-
-  useEffect(() => {
-    if (!toast) return
-    const timeout = window.setTimeout(() => setToast(""), 2200)
     return () => window.clearTimeout(timeout)
-  }, [toast])
+  }, [activeSlide, slides.length])
 
-  useEffect(() => {
-    if (!commentEvent && !shareEvent) return
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setCommentEvent(null)
-        setShareEvent(null)
-      }
-    }
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  }, [commentEvent, shareEvent])
-
-  function onScroll() {
-    const container = reelScroller.current
-    if (!container) return
-    const nextIndex = Math.round(container.scrollTop / container.clientHeight)
-    if (
-      nextIndex !== activeIndex &&
-      nextIndex >= 0 &&
-      nextIndex < reels.length
-    ) {
-      setActiveIndex(nextIndex)
-    }
-  }
-
-  function goToReel(index: number) {
-    const safeIndex = Math.max(0, Math.min(reels.length - 1, index))
-    reelNodes.current[safeIndex]?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    })
-  }
-
-  function toggleId(
-    id: number,
-    setter: React.Dispatch<React.SetStateAction<number[]>>,
-  ) {
-    setter((current) =>
-      current.includes(id)
-        ? current.filter((item) => item !== id)
-        : [...current, id],
+  const moveSlide = (direction: number) => {
+    setActiveSlide(
+      (current) => (current + direction + slides.length) % slides.length,
     )
-  }
-
-  async function copyLink(event: ReelEvent) {
-    const url = `${window.location.origin}${window.location.pathname}#event-${event.id}`
-    try {
-      await navigator.clipboard.writeText(url)
-    } catch {
-      const textarea = document.createElement("textarea")
-      textarea.value = url
-      document.body.appendChild(textarea)
-      textarea.select()
-      document.execCommand("copy")
-      textarea.remove()
-    }
-    setToast("Link copied")
-  }
-
-  function postComment(event: FormEvent) {
-    event.preventDefault()
-    const value = comment.trim()
-    if (!commentEvent || !value) return
-    setPostedComments((current) => ({
-      ...current,
-      [commentEvent.id]: [...(current[commentEvent.id] ?? []), value],
-    }))
-    setComment("")
-    setToast("Comment posted")
+    setTicketMessage("")
   }
 
   return (
-    <div className="reels-app">
-      <header className="reels-header">
-        <div className="reels-header-inner">
-          <div className="reels-brand">
+    <article className="featured-event" aria-roledescription="carousel">
+      <div className="carousel-label">
+        <span />
+        Featured this week
+      </div>
+      <div className="carousel-stage" aria-live="polite">
+        {slides.map((slide, index) => (
+          <section
+            className={`carousel-slide poster-${slide.theme}${
+              activeSlide === index ? " is-active" : ""
+            }`}
+            key={slide.name}
+            aria-label={slide.name}
+            data-layer-name={slide.name}
+            aria-hidden={activeSlide !== index}
+          >
+            <div className="carousel-copy">
+              <div className="carousel-meta">
+                <span
+                  data-layer-name="Category Tag"
+                  className={
+                    slide.category === "MUN"
+                      ? "carousel-tag tag-blue"
+                      : "carousel-tag"
+                  }
+                >
+                  {slide.category}
+                </span>
+                {slide.soon && (
+                  <span className="happening-tag">Happening soon</span>
+                )}
+              </div>
+              <h2 data-layer-name="Event Title">{slide.title}</h2>
+              <p className="carousel-description" data-layer-name="Description">
+                {slide.description}
+              </p>
+              <div className="carousel-details">
+                <div className="carousel-date" data-layer-name="Date Block">
+                  <strong>{slide.date}</strong>
+                  <span>{slide.month}</span>
+                </div>
+                <div>
+                  <strong>{slide.time}</strong>
+                  <span data-layer-name="Venue">
+                    <Icon name="location" size={16} />
+                    {slide.location}
+                  </span>
+                </div>
+              </div>
+              <button
+                className="carousel-action"
+                type="button"
+                data-layer-name="CTA Button"
+                disabled={activeSlide !== index}
+                onClick={() =>
+                  setTicketMessage(`${slide.title} tickets are opening soon.`)
+                }
+              >
+                {slide.action} <Icon name="arrow" />
+              </button>
+              {ticketMessage && (
+                <p className="ticket-message">{ticketMessage}</p>
+              )}
+            </div>
+
+            <div
+              className="carousel-poster"
+              role="img"
+              data-layer-name="Hero Image"
+              aria-label={`${slide.title} event poster`}
+            >
+              <span className="poster-index">0{index + 1}</span>
+              <span className="poster-top">{slide.posterTop}</span>
+              <strong>{slide.title}</strong>
+              <span className="poster-bottom">{slide.posterBottom}</span>
+              <i aria-hidden="true" />
+              <b aria-hidden="true">*</b>
+            </div>
+          </section>
+        ))}
+      </div>
+
+      <div className="carousel-controls">
+        <button
+          type="button"
+          onClick={() => moveSlide(-1)}
+          aria-label="Previous featured event"
+        >
+          <Icon name="arrow" />
+        </button>
+        <div className="carousel-dots" aria-label="Choose featured event">
+          {slides.map((slide, index) => (
+            <button
+              type="button"
+              key={slide.name}
+              className={activeSlide === index ? "active" : ""}
+              onClick={() => {
+                setActiveSlide(index)
+                setTicketMessage("")
+              }}
+              aria-label={`Show ${slide.name}`}
+              aria-current={activeSlide === index ? "true" : undefined}
+            />
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => moveSlide(1)}
+          aria-label="Next featured event"
+        >
+          <Icon name="arrow" />
+        </button>
+      </div>
+    </article>
+  )
+}
+
+function App() {
+  const [view, setView] = useState<AppView>("explore")
+  const [query, setQuery] = useState("")
+  const [category, setCategory] = useState("All")
+  const [dateFilter, setDateFilter] = useState<DateFilter>("Any day")
+  const [savedIds, setSavedIds] = useState<number[]>([])
+  const [selectedEvent, setSelectedEvent] = useState<VentyEvent | null>(null)
+  const [location, setLocation] = useState("London")
+  const [toast, setToast] = useState("")
+  const [installPrompt, setInstallPrompt] =
+    useState<BeforeInstallPromptEvent | null>(null)
+
+  useEffect(() => {
+    const handleInstall = (event: Event) => {
+      event.preventDefault()
+      setInstallPrompt(event as BeforeInstallPromptEvent)
+    }
+    window.addEventListener("beforeinstallprompt", handleInstall)
+    return () =>
+      window.removeEventListener("beforeinstallprompt", handleInstall)
+  }, [])
+
+  useEffect(() => {
+    if (!selectedEvent) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedEvent(null)
+    }
+    document.body.classList.add("modal-open")
+    window.addEventListener("keydown", onKeyDown)
+    return () => {
+      document.body.classList.remove("modal-open")
+      window.removeEventListener("keydown", onKeyDown)
+    }
+  }, [selectedEvent])
+
+  useEffect(() => {
+    if (!toast) return
+    const timeout = window.setTimeout(() => setToast(""), 2600)
+    return () => window.clearTimeout(timeout)
+  }, [toast])
+
+  const filteredEvents = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase()
+    return events.filter((event) => {
+      const matchesSearch =
+        !normalizedQuery ||
+        [event.title, event.venue, event.area, event.category].some((value) =>
+          value.toLowerCase().includes(normalizedQuery),
+        )
+      const matchesCategory = category === "All" || event.category === category
+      const matchesDate =
+        dateFilter === "Any day" || event.dateGroup === dateFilter
+      const matchesSaved = view === "explore" || savedIds.includes(event.id)
+      return matchesSearch && matchesCategory && matchesDate && matchesSaved
+    })
+  }, [category, dateFilter, query, savedIds, view])
+
+  const featured = events.find((event) => event.featured)!
+
+  function toggleSaved(id: number) {
+    setSavedIds((current) => {
+      const isSaved = current.includes(id)
+      setToast(isSaved ? "Removed from saved events" : "Saved for later")
+      return isSaved
+        ? current.filter((savedId) => savedId !== id)
+        : [...current, id]
+    })
+  }
+
+  function resetFilters() {
+    setQuery("")
+    setCategory("All")
+    setDateFilter("Any day")
+  }
+
+  function useMyLocation() {
+    if (!navigator.geolocation) {
+      setToast("Location is not available on this device")
+      return
+    }
+    setToast("Finding your location…")
+    navigator.geolocation.getCurrentPosition(
+      () => {
+        setLocation("Near you")
+        setToast("Showing events near you")
+      },
+      () => setToast("Location access was not allowed"),
+      { enableHighAccuracy: false, timeout: 7000 },
+    )
+  }
+
+  async function installApp() {
+    if (installPrompt) {
+      await installPrompt.prompt()
+      const result = await installPrompt.userChoice
+      setToast(
+        result.outcome === "accepted"
+          ? "Venty is installing"
+          : "Install dismissed",
+      )
+      setInstallPrompt(null)
+      return
+    }
+    setToast("On iPhone, tap Share then “Add to Home Screen”")
+  }
+
+  async function shareEvent(event: VentyEvent) {
+    const shareData = {
+      title: event.title,
+      text: `${event.title} at ${event.venue} — ${event.day} ${event.month}, ${event.time}`,
+      url: window.location.href,
+    }
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData)
+      } else {
+        await navigator.clipboard.writeText(
+          `${shareData.text} ${shareData.url}`,
+        )
+        setToast("Event link copied")
+      }
+    } catch {
+      // The native share sheet was closed without sharing.
+    }
+  }
+
+  function addToCalendar(event: VentyEvent) {
+    const monthNumber: Record<string, string> = { MAY: "05", JUN: "06" }
+    const to24HourTime = (value: string) => {
+      const [time, period] = value.split(" ")
+      const [rawHour, minute] = time.split(":").map(Number)
+      const hour = (rawHour % 12) + (period === "PM" ? 12 : 0)
+      return `${String(hour).padStart(2, "0")}${String(minute).padStart(2, "0")}00`
+    }
+    const calendarDate = `2026${monthNumber[event.month]}${event.day}`
+    const details = `${event.description}\\n${event.venue}, ${event.area}`
+    const ics = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "BEGIN:VEVENT",
+      `SUMMARY:${event.title}`,
+      `DESCRIPTION:${details}`,
+      `LOCATION:${event.venue}, ${event.area}, London`,
+      `DTSTART:${calendarDate}T${to24HourTime(event.time)}`,
+      `DTEND:${calendarDate}T${to24HourTime(event.endTime)}`,
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n")
+    const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" })
+    const link = document.createElement("a")
+    link.href = URL.createObjectURL(blob)
+    link.download = `${event.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.ics`
+    link.click()
+    URL.revokeObjectURL(link.href)
+    setToast("Calendar file created")
+  }
+
+  return (
+    <div className="app-shell">
+      <header className="app-header">
+        <div className="header-inner">
+          <button
+            className="brand"
+            type="button"
+            onClick={() => {
+              setView("explore")
+              resetFilters()
+            }}
+            aria-label="Venty explore"
+          >
             ventful<span>.</span>
-          </div>
-          <div className="demo-disclosure">Fictional demo events</div>
-          <button type="button" className="reels-location">
-            <Icon name="location" size={17} />
-            London
           </button>
+
+          <div className="desktop-search">
+            <Icon name="search" />
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search events, venues or areas"
+              aria-label="Search events"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label="Clear search"
+              >
+                <Icon name="close" size={16} />
+              </button>
+            )}
+          </div>
+
+          <nav className="desktop-nav" aria-label="Primary">
+            <button
+              type="button"
+              className={view === "explore" ? "active" : ""}
+              onClick={() => setView("explore")}
+            >
+              Explore
+            </button>
+            <button
+              type="button"
+              className={view === "saved" ? "active" : ""}
+              onClick={() => setView("saved")}
+            >
+              Saved
+              {savedIds.length > 0 && <span>{savedIds.length}</span>}
+            </button>
+          </nav>
+
+          <details className="location-picker">
+            <summary className="location-button">
+              <Icon name="location" />
+              <span>{location}</span>
+              <Icon name="chevron" size={15} />
+            </summary>
+            <div className="location-dropdown">
+              <div className="location-dropdown-heading">
+                <strong>Choose a location</strong>
+                <span>Country first, then state</span>
+              </div>
+
+              <fieldset className="country-options">
+                <legend>Country</legend>
+                <input
+                  type="radio"
+                  name="location-country"
+                  id="country-india"
+                />
+                <label htmlFor="country-india">India</label>
+                <input type="radio" name="location-country" id="country-us" />
+                <label htmlFor="country-us">United States</label>
+                <input type="radio" name="location-country" id="country-uk" />
+                <label htmlFor="country-uk">United Kingdom</label>
+              </fieldset>
+
+              <div className="state-picker">
+                <p>State or region</p>
+                <span className="state-prompt">
+                  Select a country to see its states
+                </span>
+                <div className="state-options india-states">
+                  {[
+                    "Karnataka",
+                    "Maharashtra",
+                    "Delhi",
+                    "Tamil Nadu",
+                    "West Bengal",
+                  ].map((state) => (
+                    <button
+                      type="button"
+                      key={state}
+                      onClick={(event) => {
+                        setLocation(`${state}, India`)
+                        event.currentTarget
+                          .closest("details")
+                          ?.removeAttribute("open")
+                      }}
+                    >
+                      {state}
+                    </button>
+                  ))}
+                </div>
+                <div className="state-options us-states">
+                  {[
+                    "California",
+                    "New York",
+                    "Texas",
+                    "Illinois",
+                    "Florida",
+                  ].map((state) => (
+                    <button
+                      type="button"
+                      key={state}
+                      onClick={(event) => {
+                        setLocation(`${state}, US`)
+                        event.currentTarget
+                          .closest("details")
+                          ?.removeAttribute("open")
+                      }}
+                    >
+                      {state}
+                    </button>
+                  ))}
+                </div>
+                <div className="state-options uk-states">
+                  {["England", "Scotland", "Wales", "Northern Ireland"].map(
+                    (state) => (
+                      <button
+                        type="button"
+                        key={state}
+                        onClick={(event) => {
+                          setLocation(`${state}, UK`)
+                          event.currentTarget
+                            .closest("details")
+                            ?.removeAttribute("open")
+                        }}
+                      >
+                        {state}
+                      </button>
+                    ),
+                  )}
+                </div>
+              </div>
+            </div>
+          </details>
         </div>
       </header>
 
-      <main className="reels-main">
-        <div className="viewer-shell">
-          <div className="reel-scroller" ref={reelScroller} onScroll={onScroll}>
-            {reels.map((event, index) => {
-              const isActive = index === activeIndex
-              const isLiked = liked.includes(event.id)
-              const isSaved = saved.includes(event.id)
-              const isFollowing = following.includes(event.organizer)
-              const extraComments = postedComments[event.id]?.length ?? 0
-
-              return (
-                <section
-                  className="event-reel"
-                  id={`event-${event.id}`}
-                  key={event.id}
-                  ref={(node) => {
-                    reelNodes.current[index] = node
-                  }}
-                  aria-label={`${event.title} event reel`}
-                >
-                  <img
-                    src={event.image}
-                    alt={`${event.title} — fictional ${event.category.toLowerCase()} event`}
-                    className={`reel-visual ${
-                      isActive && playing ? "is-playing" : "is-paused"
-                    }`}
-                    style={{ objectPosition: event.imagePosition }}
-                  />
-                  <div className="reel-tint" />
-                  <div
-                    className="reel-progress"
-                    aria-label="Simulated playback progress"
-                  >
-                    <span style={{ width: `${isActive ? progress : 0}%` }} />
-                  </div>
-
-                  <div className="reel-topbar">
-                    <span className="demo-label">Demo</span>
-                    <div>
-                      <button
-                        type="button"
-                        onClick={() => setPlaying((current) => !current)}
-                        aria-label={playing ? "Pause reel" : "Play reel"}
-                      >
-                        <Icon name={playing ? "pause" : "play"} size={19} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setMuted((current) => !current)}
-                        aria-label={muted ? "Unmute reel" : "Mute reel"}
-                      >
-                        <Icon name={muted ? "mute" : "volume"} size={20} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {!playing && isActive && (
-                    <button
-                      type="button"
-                      className="center-play"
-                      onClick={() => setPlaying(true)}
-                      aria-label="Resume reel"
-                    >
-                      <Icon name="play" size={30} />
-                    </button>
-                  )}
-
-                  <div className="reel-bottom-shade" />
-
-                  <div className="event-overlay">
-                    <span className="event-category">{event.category}</span>
-                    <h1>{event.title}</h1>
-                    <div className="event-facts">
-                      <span>
-                        <Icon name="calendar" size={15} />
-                        {event.date} · {event.time}
-                      </span>
-                      <span>
-                        <Icon name="location" size={15} />
-                        {event.venue}, {event.city}
-                      </span>
-                      <span>
-                        <Icon name="ticket" size={15} />
-                        {event.price}
-                      </span>
-                    </div>
-                    <p>{event.caption}</p>
-                    <div className="organizer-row">
-                      <span className="organizer-avatar">{event.initials}</span>
-                      <strong>{event.organizer}</strong>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setFollowing((current) =>
-                            current.includes(event.organizer)
-                              ? current.filter(
-                                  (name) => name !== event.organizer,
-                                )
-                              : [...current, event.organizer],
-                          )
-                        }
-                      >
-                        {isFollowing ? "Following" : "Follow"}
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      className="view-event-button"
-                      onClick={() => setToast(`${event.title} details opened`)}
-                    >
-                      View event
-                    </button>
-                  </div>
-
-                  <aside
-                    className="action-rail"
-                    aria-label={`Actions for ${event.title}`}
-                  >
-                    <button
-                      type="button"
-                      className={isLiked ? "is-liked" : ""}
-                      onClick={() => toggleId(event.id, setLiked)}
-                      aria-label={isLiked ? "Unlike event" : "Like event"}
-                    >
-                      <span>
-                        <Icon name="heart" filled={isLiked} />
-                      </span>
-                      <small>
-                        {formatCount(event.likes + (isLiked ? 1 : 0))}
-                      </small>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCommentEvent(event)}
-                      aria-label="Open comments"
-                    >
-                      <span>
-                        <Icon name="comment" />
-                      </span>
-                      <small>
-                        {formatCount(event.comments + extraComments)}
-                      </small>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShareEvent(event)}
-                      aria-label="Share event"
-                    >
-                      <span>
-                        <Icon name="share" />
-                      </span>
-                      <small>Share</small>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => copyLink(event)}
-                      aria-label="Copy event link"
-                    >
-                      <span>
-                        <Icon name="link" />
-                      </span>
-                      <small>Copy</small>
-                    </button>
-                    <button
-                      type="button"
-                      className={isSaved ? "is-saved" : ""}
-                      onClick={() => toggleId(event.id, setSaved)}
-                      aria-label={isSaved ? "Remove saved event" : "Save event"}
-                    >
-                      <span>
-                        <Icon name="bookmark" filled={isSaved} />
-                      </span>
-                      <small>{isSaved ? "Saved" : "Save"}</small>
-                    </button>
-                  </aside>
-                </section>
-              )
-            })}
+      <main className="app-main">
+        <section className="app-intro">
+          <div>
+            <p className="eyebrow">
+              <span />
+              Live around {location}
+            </p>
+            <h1>
+              {view === "saved" ? "Your saved plans." : "What are you up for?"}
+            </h1>
           </div>
+          <button className="install-button" type="button" onClick={installApp}>
+            Get the app <Icon name="arrow" />
+          </button>
+        </section>
 
-          <div className="desktop-reel-nav" aria-label="Reel navigation">
+        <div className="mobile-search">
+          <Icon name="search" />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search events, venues or areas"
+            aria-label="Search events"
+          />
+          {query && (
             <button
               type="button"
-              onClick={() => goToReel(activeIndex - 1)}
-              disabled={activeIndex === 0}
-              aria-label="Previous reel"
+              onClick={() => setQuery("")}
+              aria-label="Clear search"
             >
-              <Icon name="chevron" />
+              <Icon name="close" size={17} />
             </button>
-            <span>
-              {activeIndex + 1} / {reels.length}
-            </span>
-            <button
-              type="button"
-              onClick={() => goToReel(activeIndex + 1)}
-              disabled={activeIndex === reels.length - 1}
-              aria-label="Next reel"
-            >
-              <Icon name="chevron" />
-            </button>
-          </div>
+          )}
         </div>
-      </main>
 
-      {commentEvent && (
-        <div
-          className="modal-backdrop"
-          onMouseDown={(event) => {
-            if (event.currentTarget === event.target) setCommentEvent(null)
-          }}
-        >
-          <section
-            className="comments-panel"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Comments"
-          >
-            <header>
-              <div>
-                <strong>Comments</strong>
-                <span>{commentEvent.title}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setCommentEvent(null)}
-                aria-label="Close comments"
-              >
-                <Icon name="close" />
-              </button>
-            </header>
-            <div className="comments-list">
-              {sampleComments.map((item) => (
-                <article key={item.name}>
-                  <span>{item.initials}</span>
-                  <div>
-                    <strong>{item.name}</strong>
-                    <p>{item.text}</p>
-                  </div>
-                </article>
-              ))}
-              {(postedComments[commentEvent.id] ?? []).map((text, index) => (
-                <article key={`${text}-${index}`}>
-                  <span>YO</span>
-                  <div>
-                    <strong>You</strong>
-                    <p>{text}</p>
-                  </div>
-                </article>
+        {view === "explore" && (
+          <FeaturedEvent
+            event={featured}
+            isSaved={savedIds.includes(featured.id)}
+            onSave={() => toggleSaved(featured.id)}
+            onOpen={() => setSelectedEvent(featured)}
+          />
+        )}
+
+        <section className="discover-section">
+          <div className="discover-heading">
+            <div>
+              <p className="eyebrow">
+                {view === "saved" ? "Your shortlist" : "Discover"}
+              </p>
+              <h2>
+                {view === "saved" ? "Plans worth keeping" : "Events near you"}
+              </h2>
+            </div>
+            <span className="event-total">{filteredEvents.length} events</span>
+          </div>
+
+          <div className="filter-stack">
+            <div className="date-row" aria-label="Filter by date">
+              {dateFilters.map((item) => (
+                <button
+                  type="button"
+                  key={item}
+                  className={dateFilter === item ? "active" : ""}
+                  onClick={() => setDateFilter(item)}
+                >
+                  {item}
+                </button>
               ))}
             </div>
-            <form onSubmit={postComment}>
-              <input
-                value={comment}
-                onChange={(event) => setComment(event.target.value)}
-                placeholder="Add a comment…"
-                aria-label="Add a comment"
-                autoFocus
-              />
-              <button type="submit" disabled={!comment.trim()}>
-                Post
-              </button>
-            </form>
-          </section>
-        </div>
-      )}
+            <div className="category-row" aria-label="Filter by category">
+              {categories.map((item) => (
+                <button
+                  type="button"
+                  key={item}
+                  className={category === item ? "active" : ""}
+                  onClick={() => setCategory(item)}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          </div>
 
-      {shareEvent && (
-        <div
-          className="modal-backdrop"
-          onMouseDown={(event) => {
-            if (event.currentTarget === event.target) setShareEvent(null)
-          }}
-        >
-          <section
-            className="share-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Share event"
-          >
-            <header>
-              <div>
-                <strong>Share event</strong>
-                <span>{shareEvent.title}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShareEvent(null)}
-                aria-label="Close share menu"
-              >
-                <Icon name="close" />
-              </button>
-            </header>
-            <div className="share-options">
-              <a
-                href={`https://wa.me/?text=${encodeURIComponent(`${shareEvent.title} — ${window.location.href}`)}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                WA <span>WhatsApp</span>
-              </a>
-              <a
-                href={`mailto:?subject=${encodeURIComponent(shareEvent.title)}&body=${encodeURIComponent(window.location.href)}`}
-              >
-                EM <span>Email</span>
-              </a>
+          {filteredEvents.length > 0 ? (
+            <div className="events-grid">
+              {filteredEvents.map((event) => (
+                <EventCard
+                  event={event}
+                  key={event.id}
+                  isSaved={savedIds.includes(event.id)}
+                  onOpen={() => setSelectedEvent(event)}
+                  onSave={() => toggleSaved(event.id)}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">
+              <span>
+                <Icon
+                  name={view === "saved" ? "bookmark" : "search"}
+                  size={28}
+                />
+              </span>
+              <h3>
+                {view === "saved" ? "No saved events yet" : "No events found"}
+              </h3>
+              <p>
+                {view === "saved"
+                  ? "Tap the bookmark on anything you like and it will show up here."
+                  : "Try another search, date or category."}
+              </p>
               <button
                 type="button"
                 onClick={() => {
-                  copyLink(shareEvent)
-                  setShareEvent(null)
+                  if (view === "saved") setView("explore")
+                  resetFilters()
                 }}
               >
-                <Icon name="link" /> <span>Copy link</span>
+                {view === "saved" ? "Explore events" : "Clear filters"}
               </button>
+            </div>
+          )}
+        </section>
+      </main>
+
+      <nav className="mobile-nav" aria-label="Mobile navigation">
+        <button
+          type="button"
+          className={view === "explore" ? "active" : ""}
+          onClick={() => setView("explore")}
+        >
+          <Icon name="compass" />
+          <span>Explore</span>
+        </button>
+        <button
+          type="button"
+          className={view === "saved" ? "active" : ""}
+          onClick={() => setView("saved")}
+        >
+          <span className="mobile-save-icon">
+            <Icon name="bookmark" />
+            {savedIds.length > 0 && <small>{savedIds.length}</small>}
+          </span>
+          <span>Saved</span>
+        </button>
+        <button type="button" onClick={useMyLocation}>
+          <Icon name="location" />
+          <span>Near me</span>
+        </button>
+      </nav>
+
+      {selectedEvent && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) setSelectedEvent(null)
+          }}
+        >
+          <section
+            className="event-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="event-modal-title"
+          >
+            <div className="modal-image">
+              <img src={selectedEvent.image} alt="" />
+              <button
+                className="modal-close"
+                type="button"
+                onClick={() => setSelectedEvent(null)}
+                aria-label="Close event details"
+                autoFocus
+              >
+                <Icon name="close" />
+              </button>
+              <button
+                className={
+                  savedIds.includes(selectedEvent.id)
+                    ? "save-button is-saved"
+                    : "save-button"
+                }
+                type="button"
+                onClick={() => toggleSaved(selectedEvent.id)}
+                aria-label="Save event"
+              >
+                <Icon
+                  name={
+                    savedIds.includes(selectedEvent.id) ? "check" : "bookmark"
+                  }
+                />
+              </button>
+            </div>
+            <div className="modal-content">
+              <p className="modal-category">{selectedEvent.category}</p>
+              <h2 id="event-modal-title">{selectedEvent.title}</h2>
+              <div className="modal-facts">
+                <div>
+                  <Icon name="calendar" />
+                  <span>
+                    <strong>
+                      {selectedEvent.weekday}, {selectedEvent.day}{" "}
+                      {selectedEvent.month}
+                    </strong>
+                    {selectedEvent.time}–{selectedEvent.endTime}
+                  </span>
+                </div>
+                <div>
+                  <Icon name="location" />
+                  <span>
+                    <strong>{selectedEvent.venue}</strong>
+                    {selectedEvent.area}, London
+                  </span>
+                </div>
+                <div>
+                  <Icon name="ticket" />
+                  <span>
+                    <strong>{selectedEvent.price}</strong>
+                    Instant confirmation
+                  </span>
+                </div>
+              </div>
+              <p className="modal-description">{selectedEvent.description}</p>
+              <div className="modal-actions">
+                <a
+                  className="primary-action"
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                    `${selectedEvent.venue}, ${selectedEvent.area}, London`,
+                  )}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Get directions <Icon name="arrow" />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => addToCalendar(selectedEvent)}
+                >
+                  <Icon name="calendar" />
+                  <span>Add to calendar</span>
+                </button>
+                <button type="button" onClick={() => shareEvent(selectedEvent)}>
+                  <Icon name="share" />
+                  <span>Share</span>
+                </button>
+              </div>
             </div>
           </section>
         </div>
       )}
 
       {toast && (
-        <div className="reels-toast" role="status">
+        <div className="toast" role="status">
+          <Icon name="check" size={17} />
           {toast}
         </div>
       )}
     </div>
   )
 }
+
+export default App
