@@ -44,15 +44,6 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>
 }
 
-const fallbackEvents: VentyEvent[] = [
-  {
-    id: "featured-hack",
-    day: "14", weekday: "SAT", month: "NOV", title: "Venty Hack Weekend",
-    venue: "Indiranagar", area: "Bengaluru", time: "9:00 AM", endTime: "9:00 PM",
-    category: "Hackathon", image: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1400&q=85",
-    color: "#e8452c", dateGroup: "Any day", price: "Free", description: "Build something ridiculous in 36 hours.", featured: true,
-  },
-]
 
 const categoryImages: Record<string, string> = {
   Music: "https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=1200&q=80",
@@ -65,7 +56,7 @@ const categoryImages: Record<string, string> = {
   Event: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200&q=80",
 }
 
-const categories = ["All", "Music", "Art", "Comedy", "Dance", "Festivals", "Food", "Film"]
+const categories = ["All", "Music", "Art", "Comedy", "Dance", "Festivals", "Food", "Film", "Sports", "Tech", "Workshops", "Community", "Family"]
 const dateFilters: DateFilter[] = ["Any day", "Today", "Tomorrow", "This weekend"]
 
 function Icon({ name, size = 20 }: { name: "arrow" | "bookmark" | "calendar" | "check" | "chevron" | "close" | "compass" | "location" | "plus" | "search" | "share" | "ticket"; size?: number }) {
@@ -194,6 +185,8 @@ function App() {
   const [location, setLocation] = useState("Hyderabad, India")
   const [coordinates, setCoordinates] = useState<{ latitude: number; longitude: number } | null>(null)
   const [liveEvents, setLiveEvents] = useState<VentyEvent[]>([])
+  const [eventsStatus, setEventsStatus] = useState<"loading" | "ready" | "error">("loading")
+  const [eventsNote, setEventsNote] = useState("")
   const [toast, setToast] = useState("")
   const [assistantMessages, setAssistantMessages] = useState([{ role: "assistant", text: "Hi, I’m Venty. Ask me about events, venues, or plans for your next day out." }])
   const [assistantInput, setAssistantInput] = useState("")
@@ -236,17 +229,21 @@ function App() {
         .then((response) => response.json())
         .then((data) => {
           if (cancelled) return
-          setLiveEvents((data.events || []).map(normaliseEvent).filter(Boolean))
+          setLiveEvents((data.events || []).map(normaliseEvent).filter((event: VentyEvent | null): event is VentyEvent => Boolean(event)))
+          setEventsNote(data.note || data.error || "")
+          setEventsStatus(data.events ? "ready" : "error")
           // While the server is researching fresh events, check back for them.
           if (data.refreshing && attempts++ < 20) timer = window.setTimeout(load, 20000)
         })
-        .catch(() => { if (!cancelled) setLiveEvents([]) })
+        .catch(() => { if (!cancelled) { setLiveEvents([]); setEventsStatus("error"); setEventsNote("Couldn’t reach the events service. Please try again shortly.") } })
     }
+    setEventsStatus("loading")
+    setEventsNote("")
     load()
     return () => { cancelled = true; window.clearTimeout(timer) }
   }, [searchLocation])
 
-  const allEvents = useMemo(() => (liveEvents.length ? liveEvents : fallbackEvents), [liveEvents])
+  const allEvents = liveEvents
 
   const filteredEvents = useMemo(() => {
     return allEvents.filter((event) => {
@@ -441,14 +438,17 @@ function App() {
         <section className="discover-section">
           <div className="discover-heading">
             <div><p className="eyebrow">{view === "saved" ? "Your shortlist" : "Discover"}</p><h2>{view === "saved" ? "Plans worth keeping" : "Events near you"}</h2></div>
-            <span className="event-total">{filteredEvents.length} events</span>
+            <span className="event-total">{eventsStatus === "loading" && view === "explore" ? "Searching…" : `${filteredEvents.length} events`}</span>
           </div>
+          {view === "explore" && eventsNote && eventsStatus !== "loading" && <p className="events-note" role="status">{eventsNote}</p>}
           <div className="filter-stack">
             <div className="date-row" aria-label="Filter by date">{dateFilters.map((item) => <button type="button" key={item} className={dateFilter === item ? "active" : ""} onClick={() => setDateFilter(item)}>{item}</button>)}</div>
             <div className="category-row" aria-label="Filter by category">{categories.map((item) => <button type="button" key={item} className={category === item ? "active" : ""} onClick={() => setCategory(item)}>{item}</button>)}</div>
           </div>
           {filteredEvents.length > 0 ? (
             <div className="events-grid">{filteredEvents.map((event) => <EventCard event={event} key={event.id} isSaved={savedIds.includes(event.id)} onOpen={() => setSelectedEvent(event)} onSave={() => toggleSaved(event.id)} />)}</div>
+          ) : view === "explore" && eventsStatus === "loading" ? (
+            <div className="empty-state" role="status"><span><Icon name="search" size={28} /></span><h3>Finding verified events…</h3><p>Searching live listings for the next 60 days. This can take up to a minute.</p></div>
           ) : (
             <div className="empty-state"><span><Icon name={view === "saved" ? "bookmark" : "search"} size={28} /></span><h3>{view === "saved" ? "No saved events yet" : "No events found"}</h3><p>Try another location, search, date or category.</p><button type="button" onClick={() => { if (view === "saved") setView("explore"); resetFilters() }}>{view === "saved" ? "Explore events" : "Clear filters"}</button></div>
           )}
