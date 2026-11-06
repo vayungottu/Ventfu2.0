@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { supabase } from "./supabaseClient"
 
 type DateFilter = "Any day" | "Today" | "Tomorrow" | "This weekend"
@@ -187,9 +188,17 @@ function App() {
   const [assistantInput, setAssistantInput] = useState("")
   const [assistantLoading, setAssistantLoading] = useState(false)
   const assistantBodyRef = useRef<HTMLDivElement>(null)
+  const [assistantOpen, setAssistantOpen] = useState(false)
+  useEffect(() => {
+    if (!assistantOpen) return
+    document.body.style.overflow = "hidden"
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setAssistantOpen(false) }
+    window.addEventListener("keydown", onKey)
+    return () => { document.body.style.overflow = ""; window.removeEventListener("keydown", onKey) }
+  }, [assistantOpen])
   useEffect(() => {
     assistantBodyRef.current?.scrollTo({ top: assistantBodyRef.current.scrollHeight, behavior: "smooth" })
-  }, [assistantMessages, assistantLoading])
+  }, [assistantMessages, assistantLoading, assistantOpen])
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
 
   const searchLocation = coordinates ? `${coordinates.latitude},${coordinates.longitude}` : location
@@ -346,14 +355,18 @@ function App() {
                 </div>
               </div>
             </details>
-            <details className="ai-assistant" onToggle={(event) => { const isOpen = event.currentTarget.open; const header = event.currentTarget.closest("header"); if (header) header.style.zIndex = isOpen ? "100" : ""; document.body.style.overflow = isOpen ? "hidden" : "" }}>
-              <summary className="ai-assistant-button"><Icon name="compass" size={18} /><span>AI</span></summary>
-              <button className="ai-sidebar-backdrop" type="button" aria-label="Close Venty Assistant" onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); document.body.style.overflow = "" }} />
+            <button className={assistantOpen ? "ai-assistant-button is-open" : "ai-assistant-button"} type="button" aria-expanded={assistantOpen} onClick={() => setAssistantOpen(true)}><Icon name="compass" size={18} /><span>AI</span></button>
+          </div>
+        </div>
+      </header>
+        {assistantOpen && createPortal(
+          <div className="ai-layer">
+              <button className="ai-sidebar-backdrop" type="button" aria-label="Close Venty Assistant" onClick={() => setAssistantOpen(false)} />
               <aside className="ai-sidebar" aria-label="Venty Assistant">
                 <div className="ai-sidebar-header">
                   <div className="ai-mark"><Icon name="compass" size={20} /></div>
                   <div><strong>Venty Assistant</strong><span>AI event guide</span></div>
-                  <button type="button" aria-label="Close Venty Assistant" onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); document.body.style.overflow = "" }}><Icon name="close" size={19} /></button>
+                  <button type="button" aria-label="Close Venty Assistant" onClick={() => setAssistantOpen(false)}><Icon name="close" size={19} /></button>
                 </div>
                 <div className="ai-sidebar-body" ref={assistantBodyRef}>
                   {assistantMessages.map((message, index) => (
@@ -367,10 +380,9 @@ function App() {
                   <div><small>AI responses powered by Groq</small><button type="submit" disabled={assistantLoading || !assistantInput.trim()}>Send <Icon name="arrow" size={17} /></button></div>
                 </form>
               </aside>
-            </details>
-          </div>
-        </div>
-      </header>
+          </div>,
+          document.body,
+        )}
 
       <main className="app-main">
         <section className="app-intro">
