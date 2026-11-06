@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { supabase } from "./supabaseClient"
 
 type DateFilter = "Any day" | "Today" | "Tomorrow" | "This weekend"
@@ -53,6 +54,17 @@ const fallbackEvents: VentyEvent[] = [
   },
 ]
 
+const categoryImages: Record<string, string> = {
+  Music: "https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=1200&q=80",
+  Comedy: "https://images.unsplash.com/photo-1527224857830-43a7acc85260?auto=format&fit=crop&w=1200&q=80",
+  Art: "https://images.unsplash.com/photo-1531058020387-3be344556be6?auto=format&fit=crop&w=1200&q=80",
+  Dance: "https://images.unsplash.com/photo-1508700929628-666bc8bd84ea?auto=format&fit=crop&w=1200&q=80",
+  Festivals: "https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?auto=format&fit=crop&w=1200&q=80",
+  Food: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=1200&q=80",
+  Film: "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1200&q=80",
+  Event: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200&q=80",
+}
+
 const categories = ["All", "Music", "Art", "Comedy", "Dance", "Festivals", "Food", "Film"]
 const dateFilters: DateFilter[] = ["Any day", "Today", "Tomorrow", "This weekend"]
 
@@ -92,7 +104,7 @@ function normaliseEvent(raw: any, index: number): VentyEvent | null {
   const date = new Date(`${raw.date}T12:00:00`)
   if (Number.isNaN(date.getTime())) return null
   return {
-    id: String(raw.title + raw.date + raw.venue).toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+    id: raw.id || String(raw.title + raw.date + raw.venue).toLowerCase().replace(/[^a-z0-9]+/g, "-"),
     day: String(date.getDate()).padStart(2, "0"),
     weekday: date.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase(),
     month: date.toLocaleDateString("en-US", { month: "short" }).toUpperCase(),
@@ -102,7 +114,7 @@ function normaliseEvent(raw: any, index: number): VentyEvent | null {
     time: raw.time || "Time TBA",
     endTime: raw.endsAt ? new Date(raw.endsAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "",
     category: raw.category || "Event",
-    image: raw.imageUrl || "https://placehold.co/900x600/171512/f4efe6/png?text=Event",
+    image: raw.imageUrl || categoryImages[raw.category] || categoryImages.Event,
     color: ["#e8452c", "#1f2a5a", "#f1b82d", "#28766a", "#b25488", "#d3633a", "#2d6073"][index % 7],
     dateGroup: dateGroupFor(date),
     price: raw.price || "Price TBA",
@@ -183,9 +195,21 @@ function App() {
   const [coordinates, setCoordinates] = useState<{ latitude: number; longitude: number } | null>(null)
   const [liveEvents, setLiveEvents] = useState<VentyEvent[]>([])
   const [toast, setToast] = useState("")
-  const [assistantMessages, setAssistantMessages] = useState([{ role: "assistant", text: "Hi, I’m Venty. Ask me about upcoming events near you." }])
+  const [assistantMessages, setAssistantMessages] = useState([{ role: "assistant", text: "Hi, I’m Venty. Ask me about events, venues, or plans for your next day out." }])
   const [assistantInput, setAssistantInput] = useState("")
   const [assistantLoading, setAssistantLoading] = useState(false)
+  const assistantBodyRef = useRef<HTMLDivElement>(null)
+  const [assistantOpen, setAssistantOpen] = useState(false)
+  useEffect(() => {
+    if (!assistantOpen) return
+    document.body.style.overflow = "hidden"
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setAssistantOpen(false) }
+    window.addEventListener("keydown", onKey)
+    return () => { document.body.style.overflow = ""; window.removeEventListener("keydown", onKey) }
+  }, [assistantOpen])
+  useEffect(() => {
+    assistantBodyRef.current?.scrollTo({ top: assistantBodyRef.current.scrollHeight, behavior: "smooth" })
+  }, [assistantMessages, assistantLoading, assistantOpen])
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
 
   const searchLocation = coordinates ? `${coordinates.latitude},${coordinates.longitude}` : location
@@ -204,19 +228,25 @@ function App() {
 
   useEffect(() => {
     let cancelled = false
+    let timer: number | undefined
+    let attempts = 0
     const params = new URLSearchParams({ location: searchLocation })
-    if (query.trim()) params.set("query", query.trim())
-    fetch(`/.netlify/functions/events?${params}`)
-      .then((response) => response.json())
-      .then((data) => {
-        if (cancelled) return
-        setLiveEvents((data.events || []).map(normaliseEvent).filter(Boolean))
-      })
-      .catch(() => { if (!cancelled) setLiveEvents([]) })
-    return () => { cancelled = true }
-  }, [query, searchLocation])
+    const load = () => {
+      fetch(`/.netlify/functions/events?${params}`)
+        .then((response) => response.json())
+        .then((data) => {
+          if (cancelled) return
+          setLiveEvents((data.events || []).map(normaliseEvent).filter(Boolean))
+          // While the server is researching fresh events, check back for them.
+          if (data.refreshing && attempts++ < 20) timer = window.setTimeout(load, 20000)
+        })
+        .catch(() => { if (!cancelled) setLiveEvents([]) })
+    }
+    load()
+    return () => { cancelled = true; window.clearTimeout(timer) }
+  }, [searchLocation])
 
-  const allEvents = useMemo(() => [...fallbackEvents, ...liveEvents], [liveEvents])
+  const allEvents = useMemo(() => (liveEvents.length ? liveEvents : fallbackEvents), [liveEvents])
 
   const filteredEvents = useMemo(() => {
     return allEvents.filter((event) => {
@@ -285,10 +315,10 @@ function App() {
     setAssistantInput("")
     setAssistantLoading(true)
     try {
-      const response = await fetch("/.netlify/functions/assistant", {
+      const response = await fetch("/api/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ location: searchLocation, message }),
+        body: JSON.stringify({ location: searchLocation, message, history: assistantMessages.slice(1) }),
       })
       const data = await response.json()
       setAssistantMessages((current) => [...current, { role: "assistant", text: data.reply || "I could not find events right now." }])
@@ -342,31 +372,34 @@ function App() {
                 </div>
               </div>
             </details>
-            <details className="ai-assistant" onToggle={(event) => { const isOpen = event.currentTarget.open; const header = event.currentTarget.closest("header"); if (header) header.style.zIndex = isOpen ? "100" : ""; document.body.style.overflow = isOpen ? "hidden" : "" }}>
-              <summary className="ai-assistant-button"><Icon name="compass" size={18} /><span>AI</span></summary>
-              <button className="ai-sidebar-backdrop" type="button" aria-label="Close Venty Assistant" onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); document.body.style.overflow = "" }} />
+            <button className={assistantOpen ? "ai-assistant-button is-open" : "ai-assistant-button"} type="button" aria-expanded={assistantOpen} onClick={() => setAssistantOpen(true)}><Icon name="compass" size={18} /><span>AI</span></button>
+          </div>
+        </div>
+      </header>
+        {assistantOpen && createPortal(
+          <div className="ai-layer">
+              <button className="ai-sidebar-backdrop" type="button" aria-label="Close Venty Assistant" onClick={() => setAssistantOpen(false)} />
               <aside className="ai-sidebar" aria-label="Venty Assistant">
                 <div className="ai-sidebar-header">
                   <div className="ai-mark"><Icon name="compass" size={20} /></div>
                   <div><strong>Venty Assistant</strong><span>AI event guide</span></div>
-                  <button type="button" aria-label="Close Venty Assistant" onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); document.body.style.overflow = "" }}><Icon name="close" size={19} /></button>
+                  <button type="button" aria-label="Close Venty Assistant" onClick={() => setAssistantOpen(false)}><Icon name="close" size={19} /></button>
                 </div>
-                <div className="ai-sidebar-body">
+                <div className="ai-sidebar-body" ref={assistantBodyRef}>
                   {assistantMessages.map((message, index) => (
-                    <div className="assistant-message" key={index}><span>{message.role === "user" ? "You" : "Venty Assistant"}</span><p>{message.text}</p></div>
+                    <div className={message.role === "user" ? "assistant-message is-user" : "assistant-message"} key={index}><span>{message.role === "user" ? "You" : "Venty Assistant"}</span><p>{message.text}</p></div>
                   ))}
-                  {assistantLoading && <div className="assistant-message"><span>Venty Assistant</span><p>Searching events…</p></div>}
+                  {assistantLoading && <div className="assistant-message assistant-typing"><span>Venty Assistant</span><p>Searching events</p></div>}
                 </div>
                 <form className="ai-composer" onSubmit={sendAssistantMessage}>
                   <label htmlFor="venty-assistant-message">Message Venty Assistant</label>
-                  <textarea id="venty-assistant-message" value={assistantInput} onChange={(event) => setAssistantInput(event.target.value)} placeholder="Ask about events near you…" rows={4} />
-                  <div><small>Powered by Groq</small><button type="submit" disabled={assistantLoading}>Send <Icon name="arrow" size={17} /></button></div>
+                  <textarea id="venty-assistant-message" value={assistantInput} onChange={(event) => setAssistantInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} placeholder="Ask about events near you…" rows={4} />
+                  <div><small>AI responses powered by Groq</small><button type="submit" disabled={assistantLoading || !assistantInput.trim()}>Send <Icon name="arrow" size={17} /></button></div>
                 </form>
               </aside>
-            </details>
-          </div>
-        </div>
-      </header>
+          </div>,
+          document.body,
+        )}
 
       <main className="app-main">
         <section className="app-intro">
