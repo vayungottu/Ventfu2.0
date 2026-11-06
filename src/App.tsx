@@ -10,6 +10,7 @@ type SubmittedEvent = {
   dateTime: string
   ticketLink: string
   price: string
+  socialLink: string
   email: string
 }
 
@@ -622,6 +623,7 @@ function App() {
         dateTime: String(form.get("dateTime")),
         ticketLink: String(form.get("ticketLink")),
         price: String(form.get("price")),
+        socialLink: String(form.get("socialLink")),
         email: String(form.get("email")),
       },
       ...current,
@@ -766,89 +768,51 @@ function App() {
             </button>
           </nav>
 
-          <details className="location-picker">
-            <summary className="location-button">
-              <Icon name="location" />
-              <span>{location}</span>
-              <Icon name="chevron" size={15} />
-            </summary>
-            <div className="location-dropdown">
-              <div className="location-dropdown-heading">
-                <strong>Choose a location</strong>
-                <span>Country first, then state</span>
-              </div>
-
-              <fieldset className="country-options">
-                <legend>Country</legend>
-                <input
-                  type="radio"
-                  name="location-country"
-                  id="country-india"
-                />
-                <label htmlFor="country-india">India</label>
-                <input type="radio" name="location-country" id="country-us" />
-                <label htmlFor="country-us">United States</label>
-                <input type="radio" name="location-country" id="country-uk" />
-                <label htmlFor="country-uk">United Kingdom</label>
-              </fieldset>
-
-              <div className="state-picker">
-                <p>State or region</p>
-                <span className="state-prompt">
-                  Select a country to see its states
-                </span>
-                <div className="state-options india-states">
-                  {[
-                    "Karnataka",
-                    "Maharashtra",
-                    "Delhi",
-                    "Tamil Nadu",
-                    "West Bengal",
-                  ].map((state) => (
-                    <button
-                      type="button"
-                      key={state}
-                      onClick={(event) => {
-                        setLocation(`${state}, India`)
-                        event.currentTarget
-                          .closest("details")
-                          ?.removeAttribute("open")
-                      }}
-                    >
-                      {state}
-                    </button>
-                  ))}
+          <div className="header-tools">
+            <details className="location-picker">
+              <summary className="location-button">
+                <Icon name="location" />
+                <span>{location}</span>
+                <Icon name="chevron" size={15} />
+              </summary>
+              <div className="location-dropdown">
+                <div className="location-dropdown-heading">
+                  <strong>Choose a location</strong>
+                  <span>Country first, then state</span>
                 </div>
-                <div className="state-options us-states">
-                  {[
-                    "California",
-                    "New York",
-                    "Texas",
-                    "Illinois",
-                    "Florida",
-                  ].map((state) => (
-                    <button
-                      type="button"
-                      key={state}
-                      onClick={(event) => {
-                        setLocation(`${state}, US`)
-                        event.currentTarget
-                          .closest("details")
-                          ?.removeAttribute("open")
-                      }}
-                    >
-                      {state}
-                    </button>
-                  ))}
-                </div>
-                <div className="state-options uk-states">
-                  {["England", "Scotland", "Wales", "Northern Ireland"].map(
-                    (state) => (
+
+                <fieldset className="country-options">
+                  <legend>Country</legend>
+                  <input
+                    type="radio"
+                    name="location-country"
+                    id="country-india"
+                  />
+                  <label htmlFor="country-india">India</label>
+                  <input type="radio" name="location-country" id="country-us" />
+                  <label htmlFor="country-us">United States</label>
+                  <input type="radio" name="location-country" id="country-uk" />
+                  <label htmlFor="country-uk">United Kingdom</label>
+                </fieldset>
+
+                <div className="state-picker">
+                  <p>State or region</p>
+                  <span className="state-prompt">
+                    Select a country to see its states
+                  </span>
+                  <div className="state-options india-states">
+                    {[
+                      "Karnataka",
+                      "Maharashtra",
+                      "Delhi",
+                      "Tamil Nadu",
+                      "West Bengal",
+                    ].map((state) => (
                       <button
                         type="button"
                         key={state}
                         onClick={(event) => {
-                          setLocation(`${state}, UK`)
+                          setLocation(`${state}, India`)
                           event.currentTarget
                             .closest("details")
                             ?.removeAttribute("open")
@@ -856,12 +820,236 @@ function App() {
                       >
                         {state}
                       </button>
-                    ),
-                  )}
+                    ))}
+                  </div>
+                  <div className="state-options us-states">
+                    {[
+                      "California",
+                      "New York",
+                      "Texas",
+                      "Illinois",
+                      "Florida",
+                    ].map((state) => (
+                      <button
+                        type="button"
+                        key={state}
+                        onClick={(event) => {
+                          setLocation(`${state}, US`)
+                          event.currentTarget
+                            .closest("details")
+                            ?.removeAttribute("open")
+                        }}
+                      >
+                        {state}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="state-options uk-states">
+                    {["England", "Scotland", "Wales", "Northern Ireland"].map(
+                      (state) => (
+                        <button
+                          type="button"
+                          key={state}
+                          onClick={(event) => {
+                            setLocation(`${state}, UK`)
+                            event.currentTarget
+                              .closest("details")
+                              ?.removeAttribute("open")
+                          }}
+                        >
+                          {state}
+                        </button>
+                      ),
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          </details>
+            </details>
+
+            <details
+              className="ai-assistant"
+              onToggle={(event) => {
+                const isOpen = event.currentTarget.open
+                const header = event.currentTarget.closest("header")
+                if (header) header.style.zIndex = isOpen ? "100" : ""
+                document.body.style.overflow = isOpen ? "hidden" : ""
+              }}
+            >
+              <summary className="ai-assistant-button">
+                <Icon name="compass" size={18} />
+                <span>AI</span>
+              </summary>
+              <button
+                className="ai-sidebar-backdrop"
+                type="button"
+                aria-label="Close Venty Assistant"
+                onClick={(event) => {
+                  event.currentTarget
+                    .closest("details")
+                    ?.removeAttribute("open")
+                  document.body.style.overflow = ""
+                }}
+              />
+              <aside className="ai-sidebar" aria-label="Venty Assistant">
+                <div className="ai-sidebar-header">
+                  <div className="ai-mark">
+                    <Icon name="compass" size={20} />
+                  </div>
+                  <div>
+                    <strong>Venty Assistant</strong>
+                    <span>AI event guide</span>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Close Venty Assistant"
+                    onClick={(event) => {
+                      event.currentTarget
+                        .closest("details")
+                        ?.removeAttribute("open")
+                      document.body.style.overflow = ""
+                    }}
+                  >
+                    <Icon name="close" size={19} />
+                  </button>
+                </div>
+                <div className="ai-sidebar-body">
+                  <div className="assistant-message">
+                    <span>Venty Assistant</span>
+                    <p>
+                      Hi, I’m Venty. Ask me about events, venues, or plans for
+                      your next day out.
+                    </p>
+                  </div>
+                </div>
+                <div className="ai-composer">
+                  <label htmlFor="venty-assistant-message">
+                    Message Venty Assistant
+                  </label>
+                  <textarea
+                    id="venty-assistant-message"
+                    placeholder="Ask about events near you…"
+                    rows={4}
+                  />
+                  <div>
+                    <small>AI responses will be connected next.</small>
+                    <button type="button" disabled>
+                      Send <Icon name="arrow" size={17} />
+                    </button>
+                  </div>
+                </div>
+              </aside>
+            </details>
+
+            <style>{`
+            .header-tools { display: flex; align-items: center; gap: 9px; }
+            .ai-assistant > summary { list-style: none; }
+            .ai-assistant > summary::-webkit-details-marker { display: none; }
+            .ai-assistant-button {
+              display: flex; height: 42px; align-items: center; gap: 7px;
+              padding: 0 13px; border: var(--border); border-radius: 7px;
+              background: var(--tomato); box-shadow: 2px 2px 0 var(--text);
+              color: white; font-size: 12px; font-weight: 800;
+              cursor: pointer; user-select: none;
+            }
+            .ai-assistant[open] .ai-assistant-button {
+              transform: translate(2px, 2px); box-shadow: none;
+            }
+            .ai-sidebar-backdrop {
+              position: fixed; inset: 0; z-index: 90; border: 0;
+              background: rgba(22, 20, 18, 0.48); backdrop-filter: blur(3px);
+              cursor: default; animation: fade-in 160ms ease;
+            }
+            .ai-sidebar {
+              position: fixed; top: 0; right: 0; z-index: 91; display: grid;
+              grid-template-rows: auto 1fr auto; width: min(430px, 100vw);
+              height: 100dvh; border-left: var(--border);
+              background: var(--surface); box-shadow: -8px 0 30px rgba(22,20,18,.16);
+              animation: ai-sidebar-in 220ms ease;
+            }
+            .ai-sidebar-header {
+              display: grid; grid-template-columns: auto 1fr auto; gap: 12px;
+              align-items: center; padding: 20px; border-bottom: 1px solid var(--line);
+              background: #e8dfd1;
+            }
+            .ai-mark {
+              display: grid; width: 42px; height: 42px; place-items: center;
+              border: var(--border); border-radius: 50%;
+              background: var(--tomato); color: white;
+            }
+            .ai-sidebar-header > div:nth-child(2) {
+              display: flex; flex-direction: column; gap: 2px;
+            }
+            .ai-sidebar-header strong {
+              font-family: 'Bricolage Grotesque', sans-serif;
+              font-size: 20px; letter-spacing: -0.03em;
+            }
+            .ai-sidebar-header span { color: var(--muted); font-size: 11px; }
+            .ai-sidebar-header > button {
+              display: grid; width: 38px; height: 38px; place-items: center;
+              border: 1px solid var(--text); border-radius: 50%;
+              background: var(--surface);
+            }
+            .ai-sidebar-body {
+              padding: 24px 20px; overflow-y: auto;
+              background:
+                linear-gradient(rgba(213,206,194,.35) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(213,206,194,.35) 1px, transparent 1px);
+              background-size: 24px 24px;
+            }
+            .assistant-message {
+              max-width: 88%; padding: 15px 16px; border: 1px solid var(--text);
+              border-radius: 5px 14px 14px 14px; background: var(--surface);
+              box-shadow: 2px 2px 0 var(--text);
+            }
+            .assistant-message span {
+              color: var(--tomato); font-size: 9px; font-weight: 800;
+              letter-spacing: .8px; text-transform: uppercase;
+            }
+            .assistant-message p {
+              margin: 7px 0 0; font-size: 14px; line-height: 1.5;
+            }
+            .ai-composer {
+              padding: 16px 20px calc(18px + env(safe-area-inset-bottom, 0px));
+              border-top: 1px solid var(--line); background: var(--surface);
+            }
+            .ai-composer label {
+              display: block; margin-bottom: 8px; font-size: 10px;
+              font-weight: 800; letter-spacing: .75px; text-transform: uppercase;
+            }
+            .ai-composer textarea {
+              display: block; width: 100%; padding: 12px; resize: none;
+              border: 1px solid #bcb3a7; border-radius: 7px; outline: 0;
+              background: white; color: var(--text); font-size: 14px; line-height: 1.4;
+            }
+            .ai-composer textarea:focus {
+              border-color: var(--text); box-shadow: 0 0 0 3px rgba(232,69,44,.12);
+            }
+            .ai-composer > div {
+              display: flex; align-items: center; justify-content: space-between;
+              gap: 12px; margin-top: 10px;
+            }
+            .ai-composer small { color: var(--muted); font-size: 10px; }
+            .ai-composer button {
+              display: flex; min-height: 40px; align-items: center; gap: 8px;
+              padding: 0 14px; border: var(--border); border-radius: 6px;
+              background: var(--text); color: white; font-size: 12px;
+              font-weight: 750; opacity: .48; cursor: not-allowed;
+            }
+            @keyframes ai-sidebar-in {
+              from { transform: translateX(100%); }
+              to { transform: translateX(0); }
+            }
+            @media (max-width: 720px) {
+              .header-tools { gap: 7px; }
+              .ai-assistant-button {
+                width: 40px; height: 38px; justify-content: center;
+                padding: 0; box-shadow: none;
+              }
+              .ai-assistant-button span { display: none; }
+              .ai-sidebar { width: 100vw; border-left: 0; }
+            }
+          `}</style>
+          </div>
         </div>
       </header>
 
@@ -944,6 +1132,15 @@ function App() {
                     <Icon name="location" size={16} />
                     {event.venue}
                   </p>
+                  <a
+                    className="submitted-social-link"
+                    href={event.socialLink}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <Icon name="share" size={15} />
+                    Social media page
+                  </a>
                   <div className="approval-status">
                     <span />
                     Pending approval
@@ -1267,6 +1464,18 @@ function App() {
                   placeholder="e.g. £15 or Free"
                   required
                 />
+              </label>
+              <label className="form-field form-field-wide">
+                <span>Event or organiser social media page</span>
+                <input
+                  name="socialLink"
+                  type="url"
+                  placeholder="https://instagram.com/yourpage"
+                  required
+                />
+                <small>
+                  Add your Instagram, Facebook, TikTok, or other social page.
+                </small>
               </label>
               <label className="form-field form-field-wide">
                 <span>Email address</span>

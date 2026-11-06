@@ -532,11 +532,26 @@ svg {
   font-size: 12px;
 }
 
+.submitted-social-link {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 7px;
+  margin-top: 9px;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .approval-status {
   display: flex;
   align-items: center;
   gap: 7px;
-  margin-top: 17px;
+  margin-top: 14px;
   color: #8a5a00;
   font-size: 10px;
   font-weight: 800;
