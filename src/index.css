@@ -1247,6 +1247,13 @@ svg {
   font-size: 13px;
 }
 
+.events-note {
+  margin: -8px 0 20px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .filter-stack {
   margin-bottom: 30px;
   border-top: 1px solid var(--line);
