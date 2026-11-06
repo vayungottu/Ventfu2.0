@@ -1,11 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
 import './auth-feedback.css'
 
-const url = import.meta.env.VITE_SUPABASE_URL
-const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
-if (!url || !key) throw new Error('Missing Supabase configuration. Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.')
-
-export const supabase = createClient(url, key, { auth: { persistSession: true, autoRefreshToken: true } })
+// Public browser configuration for this app; never use a secret or service-role key here.
+const url = 'https://swqrxssxuyfhtktxumuh.supabase.co'
+const key = 'sb_publishable_R8JNzTnG0c4mhgOu4FOUPQ_GRZOfup5'
+export const supabase = createClient(url, key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } })
 
 function showAuthFeedback(message: string, failure = false) {
   let panel = document.getElementById('auth-feedback')
@@ -32,16 +31,26 @@ supabase.auth.signUp = async (...args: Parameters<typeof originalSignUp>) => {
   showAuthFeedback('Creating your account… Please wait.')
   try {
     const result = await originalSignUp(...args)
-    if (result.error) {
-      showAuthFeedback(result.error.message, true)
-    } else if (result.data.session) {
-      showAuthFeedback('Your account is ready and you are signed in. Email confirmation was not required.')
-    } else {
-      showAuthFeedback('Check your email to confirm your account. If a confirmation email was sent, open its link, then return here to sign in. Check spam too. If you already have an account, sign in instead.')
-    }
+    if (result.error) showAuthFeedback(result.error.message, true)
+    else if (result.data.session) showAuthFeedback('Your account is ready and you are signed in. Email confirmation was not required.')
+    else showAuthFeedback('Check your email to confirm your account, including spam. If a confirmation email was sent, open its link and return here to sign in. If you already have an account, sign in instead.')
     return result
   } catch (error) {
     showAuthFeedback(error instanceof Error ? error.message : 'Could not create your account. Please try again.', true)
+    throw error
+  }
+}
+
+const originalSignIn = supabase.auth.signInWithPassword.bind(supabase.auth)
+supabase.auth.signInWithPassword = async (...args: Parameters<typeof originalSignIn>) => {
+  showAuthFeedback('Signing in… Please wait.')
+  try {
+    const result = await originalSignIn(...args)
+    if (result.error) showAuthFeedback(result.error.message, true)
+    else showAuthFeedback('Signed in successfully.')
+    return result
+  } catch (error) {
+    showAuthFeedback(error instanceof Error ? error.message : 'Could not sign in. Please try again.', true)
     throw error
   }
 }
