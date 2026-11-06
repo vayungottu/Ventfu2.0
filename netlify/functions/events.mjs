@@ -90,7 +90,7 @@ async function groqSearch({ location, firstDate, lastDate }) {
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}`, 'Content-Type': 'application/json' },
-    signal: AbortSignal.timeout(8500),
+    signal: AbortSignal.timeout(23000),
     body: JSON.stringify({
       model: 'openai/gpt-oss-120b',
       tools: [{ type: 'browser_search' }],
@@ -111,7 +111,7 @@ async function ticketmaster({ location, firstDate, lastDate }) {
   const p = new URLSearchParams({ apikey: process.env.TICKETMASTER_API_KEY, size: '100', sort: 'date,asc', startDateTime: `${firstDate}T00:00:00Z`, endDateTime: `${lastDate}T23:59:59Z` });
   const c = location.split(',').map(Number);
   if (c.length === 2 && c.every(Number.isFinite) && Math.abs(c[0]) <= 90 && Math.abs(c[1]) <= 180) { p.set('latlong', c.join(',')); p.set('radius', '100'); p.set('unit', 'km'); } else p.set('city', location.split(',')[0].trim());
-  const response = await fetch(`https://app.ticketmaster.com/discovery/v2/events.json?${p}`, { signal: AbortSignal.timeout(8000) });
+  const response = await fetch(`https://app.ticketmaster.com/discovery/v2/events.json?${p}`, { signal: AbortSignal.timeout(20000) });
   if (!response.ok) throw new Error(`Ticketmaster returned ${response.status}`);
   const data = await response.json();
   return (data._embedded?.events || []).filter(e => !['cancelled', 'postponed', 'canceled'].includes(e.dates?.status?.code)).map(e => {

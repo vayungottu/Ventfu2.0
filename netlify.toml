@@ -1,0 +1,9 @@
+[build]
+  command = "pnpm run build"
+  publish = "dist"
+
+[functions."events"]
+  timeout = 26
+
+[functions."assistant"]
+  timeout = 26
