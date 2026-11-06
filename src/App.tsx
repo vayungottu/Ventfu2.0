@@ -54,6 +54,17 @@ const fallbackEvents: VentyEvent[] = [
   },
 ]
 
+const categoryImages: Record<string, string> = {
+  Music: "https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=1200&q=80",
+  Comedy: "https://images.unsplash.com/photo-1527224857830-43a7acc85260?auto=format&fit=crop&w=1200&q=80",
+  Art: "https://images.unsplash.com/photo-1531058020387-3be344556be6?auto=format&fit=crop&w=1200&q=80",
+  Dance: "https://images.unsplash.com/photo-1508700929628-666bc8bd84ea?auto=format&fit=crop&w=1200&q=80",
+  Festivals: "https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?auto=format&fit=crop&w=1200&q=80",
+  Food: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=1200&q=80",
+  Film: "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1200&q=80",
+  Event: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200&q=80",
+}
+
 const categories = ["All", "Music", "Art", "Comedy", "Dance", "Festivals", "Food", "Film"]
 const dateFilters: DateFilter[] = ["Any day", "Today", "Tomorrow", "This weekend"]
 
@@ -93,7 +104,7 @@ function normaliseEvent(raw: any, index: number): VentyEvent | null {
   const date = new Date(`${raw.date}T12:00:00`)
   if (Number.isNaN(date.getTime())) return null
   return {
-    id: String(raw.title + raw.date + raw.venue).toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+    id: raw.id || String(raw.title + raw.date + raw.venue).toLowerCase().replace(/[^a-z0-9]+/g, "-"),
     day: String(date.getDate()).padStart(2, "0"),
     weekday: date.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase(),
     month: date.toLocaleDateString("en-US", { month: "short" }).toUpperCase(),
@@ -103,7 +114,7 @@ function normaliseEvent(raw: any, index: number): VentyEvent | null {
     time: raw.time || "Time TBA",
     endTime: raw.endsAt ? new Date(raw.endsAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "",
     category: raw.category || "Event",
-    image: raw.imageUrl || "https://placehold.co/900x600/171512/f4efe6/png?text=Event",
+    image: raw.imageUrl || categoryImages[raw.category] || categoryImages.Event,
     color: ["#e8452c", "#1f2a5a", "#f1b82d", "#28766a", "#b25488", "#d3633a", "#2d6073"][index % 7],
     dateGroup: dateGroupFor(date),
     price: raw.price || "Price TBA",
@@ -217,19 +228,25 @@ function App() {
 
   useEffect(() => {
     let cancelled = false
+    let timer: number | undefined
+    let attempts = 0
     const params = new URLSearchParams({ location: searchLocation })
-    if (query.trim()) params.set("query", query.trim())
-    fetch(`/.netlify/functions/events?${params}`)
-      .then((response) => response.json())
-      .then((data) => {
-        if (cancelled) return
-        setLiveEvents((data.events || []).map(normaliseEvent).filter(Boolean))
-      })
-      .catch(() => { if (!cancelled) setLiveEvents([]) })
-    return () => { cancelled = true }
-  }, [query, searchLocation])
+    const load = () => {
+      fetch(`/.netlify/functions/events?${params}`)
+        .then((response) => response.json())
+        .then((data) => {
+          if (cancelled) return
+          setLiveEvents((data.events || []).map(normaliseEvent).filter(Boolean))
+          // While the server is researching fresh events, check back for them.
+          if (data.refreshing && attempts++ < 20) timer = window.setTimeout(load, 20000)
+        })
+        .catch(() => { if (!cancelled) setLiveEvents([]) })
+    }
+    load()
+    return () => { cancelled = true; window.clearTimeout(timer) }
+  }, [searchLocation])
 
-  const allEvents = useMemo(() => [...fallbackEvents, ...liveEvents], [liveEvents])
+  const allEvents = useMemo(() => (liveEvents.length ? liveEvents : fallbackEvents), [liveEvents])
 
   const filteredEvents = useMemo(() => {
     return allEvents.filter((event) => {
