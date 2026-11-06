@@ -226,6 +226,7 @@ function App() {
   const [authEmail, setAuthEmail] = useState("")
   const [authPassword, setAuthPassword] = useState("")
   const [authError, setAuthError] = useState("")
+  const [authNotice, setAuthNotice] = useState("")
   const [authLoading, setAuthLoading] = useState(false)
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
 
@@ -367,18 +368,37 @@ function App() {
     event.preventDefault()
     setAuthLoading(true)
     setAuthError("")
+    setAuthNotice("")
     const email = authEmail.trim()
     const password = authPassword
 
-    const { error } = authMode === "signin"
-      ? await supabase.auth.signInWithPassword({ email, password })
-      : await supabase.auth.signUp({ email, password })
+    if (authMode === "signin") {
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      setAuthLoading(false)
+      if (error) { setAuthError(error.message); return }
+      setAuthOpen(false)
+      setAuthPassword("")
+      setToast("Signed in")
+      return
+    }
 
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: "https://ventful4.netlify.app/" },
+    })
     setAuthLoading(false)
     if (error) { setAuthError(error.message); return }
-    setAuthOpen(false)
+
+    if (data.session) {
+      setAuthOpen(false)
+      setAuthPassword("")
+      setToast("Account created")
+      return
+    }
+
+    setAuthNotice(`Check ${email} and click the confirmation link from Supabase. Then sign in.`)
     setAuthPassword("")
-    setToast(authMode === "signin" ? "Signed in" : "Account created")
   }
 
   async function signOut() {
@@ -626,9 +646,10 @@ function App() {
                 <label>Email<input type="email" value={authEmail} onChange={(event) => setAuthEmail(event.target.value)} required /></label>
                 <label>Password<input type="password" value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} required minLength={6} /></label>
                 {authError && <p className="auth-error">{authError}</p>}
+                {authNotice && <p className="auth-notice">{authNotice}</p>}
                 <button type="submit" disabled={authLoading}>{authLoading ? "Please wait…" : authMode === "signin" ? "Sign in" : "Create account"}</button>
               </form>
-              <button type="button" className="auth-switch" onClick={() => { setAuthMode(authMode === "signin" ? "signup" : "signin"); setAuthError("") }}>
+              <button type="button" className="auth-switch" onClick={() => { setAuthMode(authMode === "signin" ? "signup" : "signin"); setAuthError(""); setAuthNotice("") }}>
                 {authMode === "signin" ? "Need an account? Create one" : "Already have an account? Sign in"}
               </button>
             </div>
