@@ -1,0 +1,11 @@
+#auth-feedback { position:fixed; z-index:300; top:20px; left:50%; transform:translateX(-50%); width:min(480px,calc(100vw - 32px)); padding:20px; border:2px solid #161412; border-radius:12px; background:#fffdf8; color:#161412; box-shadow:4px 4px 0 #161412; font:16px/1.5 sans-serif; }
+#auth-feedback p { margin:0 0 12px; }
+#auth-feedback button { padding:8px 14px; border:1px solid #161412; border-radius:6px; background:#161412; color:white; cursor:pointer; }
+#auth-feedback[data-error="true"] { border-color:#b42318; }
+.event-modal:has(input[type="password"]) { display:block; width:min(460px,calc(100vw - 32px)); max-height:calc(100dvh - 40px); overflow:auto; }
+.event-modal:has(input[type="password"]) .modal-content { padding:28px; }
+.event-modal:has(input[type="password"]) h2 { font-size:34px; line-height:1.1; margin-bottom:22px; }
+.event-modal:has(input[type="password"]) form { display:grid; gap:14px; }
+.event-modal:has(input[type="password"]) input { width:100%; min-height:48px; padding:12px; border:1px solid #c8c0b5; border-radius:7px; background:#fffdf8; font-size:16px; box-sizing:border-box; }
+.event-modal:has(input[type="password"]) .modal-actions { display:grid; grid-template-columns:1fr; gap:12px; }
+.event-modal:has(input[type="password"]) .modal-actions button { width:100%; min-height:46px; padding:10px 14px; }
