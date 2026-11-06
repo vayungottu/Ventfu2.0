@@ -1,7 +1,19 @@
-import type { AppEvent } from "./App"
-import { Icon } from "./App"
+type HotPick = {
+  id: string
+  title: string
+  category: string
+  image: string
+  weekday: string
+  day: string
+  month: string
+  time: string
+  venue: string
+  area: string
+  startsAt: Date | null
+  endsAt: Date | null
+}
 
-export function HotPicksBoard({ events, onOpen }: { events: AppEvent[]; onOpen: (event: AppEvent) => void }) {
+export function HotPicksBoard<T extends HotPick>({ events, onOpen }: { events: T[]; onOpen: (event: T) => void }) {
   if (!events.length) return null
   const now = new Date()
   return (
@@ -15,7 +27,7 @@ export function HotPicksBoard({ events, onOpen }: { events: AppEvent[]; onOpen: 
       </div>
       <div className="hot-picks-track">
         {events.map((event) => {
-          const happeningNow = event.startsAt && event.endsAt && now >= event.startsAt && now <= event.endsAt
+          const happeningNow = Boolean(event.startsAt && event.endsAt && now >= event.startsAt && now <= event.endsAt)
           return (
             <button className="hot-pick-card" type="button" key={event.id} onClick={() => onOpen(event)}>
               <span className="hot-pick-image-wrap">
@@ -26,7 +38,13 @@ export function HotPicksBoard({ events, onOpen }: { events: AppEvent[]; onOpen: 
               <span className="hot-pick-body">
                 <strong>{event.title}</strong>
                 <span>{event.weekday} {event.day} {event.month} · {event.time}</span>
-                <span><Icon name="location" size={14} />{event.venue}{event.area ? `, ${event.area}` : ""}</span>
+                <span>
+                  <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                    <path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" />
+                    <circle cx="12" cy="10" r="2.5" />
+                  </svg>
+                  {event.venue}{event.area ? `, ${event.area}` : ""}
+                </span>
               </span>
             </button>
           )
