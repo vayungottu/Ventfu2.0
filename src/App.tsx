@@ -39,13 +39,6 @@ type VentyEvent = {
   sourceUrl?: string
 }
 
-type EventComment = {
-  id: string
-  author: string
-  body: string
-  createdAt: string
-}
-
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>
@@ -65,7 +58,7 @@ const categoryImages: Record<string, string> = {
 const categories = ["All", "Music", "Art", "Comedy", "Dance", "Festivals", "Food", "Film", "Sports", "Tech", "Workshops", "Community", "Family"]
 const dateFilters: DateFilter[] = ["Any day", "Today", "Tomorrow", "This weekend"]
 
-function Icon({ name, size = 20 }: { name: "arrow" | "bookmark" | "calendar" | "check" | "chevron" | "close" | "compass" | "heart" | "location" | "plus" | "search" | "share" | "ticket"; size?: number }) {
+function Icon({ name, size = 20 }: { name: "arrow" | "bookmark" | "calendar" | "check" | "chevron" | "close" | "compass" | "heart" | "location" | "plus" | "search" | "share" | "ticket" | "user"; size?: number }) {
   const paths = {
     arrow: <path d="M5 12h14M13 6l6 6-6 6" />,
     bookmark: <path d="M6 4.8A1.8 1.8 0 0 1 7.8 3h8.4A1.8 1.8 0 0 1 18 4.8V21l-6-4-6 4V4.8Z" />,
@@ -80,6 +73,7 @@ function Icon({ name, size = 20 }: { name: "arrow" | "bookmark" | "calendar" | "
     search: <path d="m21 21-4.35-4.35M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z" />,
     share: <><circle cx="18" cy="5" r="2.5" /><circle cx="6" cy="12" r="2.5" /><circle cx="18" cy="19" r="2.5" /><path d="m8.2 10.8 7.6-4.5M8.2 13.2 7.6 4.5" /></>,
     ticket: <path d="M3 8.5V5h18v3.5a3.5 3.5 0 0 0 0 7V19H3v-3.5a3.5 3.5 0 0 0 0-7ZM13 8v8" />,
+    user: <><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6" /></>,
   }
   return <svg viewBox="0 0 24 24" aria-hidden="true" style={{ width: size, height: size }}>{paths[name]}</svg>
 }
@@ -122,7 +116,7 @@ function normaliseEvent(raw: any, index: number): VentyEvent | null {
   }
 }
 
-function submittedToVenty(event: SubmittedEvent, index: number): VentyEvent {
+function submittedToVenty(event: SubmittedEvent): VentyEvent {
   const date = new Date(event.dateTime)
   return {
     id: `user-${event.id}`,
@@ -225,12 +219,23 @@ function App() {
   const [assistantOpen, setAssistantOpen] = useState(false)
   const [likeCount, setLikeCount] = useState(0)
   const [liked, setLiked] = useState(false)
-  const [comments, setComments] = useState<EventComment[]>([])
-  const [commentText, setCommentText] = useState("")
-  const [socialLoading, setSocialLoading] = useState(false)
+  const [likeLoading, setLikeLoading] = useState(false)
+  const [user, setUser] = useState<any | null>(null)
+  const [authOpen, setAuthOpen] = useState(false)
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin")
+  const [authEmail, setAuthEmail] = useState("")
+  const [authPassword, setAuthPassword] = useState("")
+  const [authError, setAuthError] = useState("")
+  const [authLoading, setAuthLoading] = useState(false)
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
 
   const searchLocation = coordinates ? `${coordinates.latitude},${coordinates.longitude}` : location
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setUser(data.session?.user || null))
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => setUser(session?.user || null))
+    return () => subscription.subscription.unsubscribe()
+  }, [])
 
   useEffect(() => {
     const handleInstall = (event: Event) => { event.preventDefault(); setInstallPrompt(event as BeforeInstallPromptEvent) }
@@ -270,30 +275,22 @@ function App() {
   useEffect(() => {
     if (!selectedEvent) return
     let cancelled = false
-    setSocialLoading(true)
-    setComments([])
+    setLikeLoading(true)
     setLikeCount(0)
     setLiked(false)
 
-    async function loadSocial() {
-      const { data: userData } = await supabase.auth.getUser()
-      const userId = userData.user?.id || localStorage.getItem("venty_guest_id") || crypto.randomUUID()
-      if (!userData.user?.id) localStorage.setItem("venty_guest_id", userId)
+    supabase.from("event_likes").select("user_id").eq("event_id", selectedEvent.id)
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error) { setToast(error.message); setLikeLoading(false); return }
+        const userId = user?.id || localStorage.getItem("venty_guest_id")
+        setLikeCount(data?.length || 0)
+        setLiked(Boolean(userId && data?.some((row: any) => row.user_id === userId)))
+        setLikeLoading(false)
+      })
 
-      const [likes, commentsData] = await Promise.all([
-        supabase.from("event_likes").select("user_id").eq("event_id", selectedEvent!.id),
-        supabase.from("event_comments").select("id,author,body,created_at").eq("event_id", selectedEvent!.id).order("created_at", { ascending: true }),
-      ])
-      if (cancelled) return
-      setLikeCount(likes.data?.length || 0)
-      setLiked(Boolean(likes.data?.some((row: any) => row.user_id === userId)))
-      setComments((commentsData.data || []).map((row: any) => ({ id: row.id, author: row.author, body: row.body, createdAt: row.created_at })))
-      setSocialLoading(false)
-    }
-
-    loadSocial()
     return () => { cancelled = true }
-  }, [selectedEvent])
+  }, [selectedEvent, user])
 
   const allEvents = useMemo(() => [...submittedEvents.map(submittedToVenty), ...liveEvents], [submittedEvents, liveEvents])
 
@@ -331,28 +328,28 @@ function App() {
       price: String(form.get("price") || ""),
       social_url: String(form.get("socialLink") || "") || null,
       maps_url: String(form.get("mapsLink") || ""),
-      email: "",
+      email: user?.email || "",
       status: "approved",
       client_token: localStorage.getItem("venty_submission_token") || crypto.randomUUID(),
     }).select().single()
     if (error) { setToast(error.message); return }
     localStorage.setItem("venty_submission_token", data.client_token)
-    const submitted: SubmittedEvent = { id: data.id, name: data.title, venue: data.venue, dateTime: data.starts_at, ticketLink: data.ticket_url || "", price: data.price || "", socialLink: data.social_url || "", mapsLink: data.maps_url || "", email: "", status: data.status }
+    const submitted: SubmittedEvent = { id: data.id, name: data.title, venue: data.venue, dateTime: data.starts_at, ticketLink: data.ticket_url || "", price: data.price || "", socialLink: data.social_url || "", mapsLink: data.maps_url || "", email: data.email || "", status: data.status }
     setSubmittedEvents((current) => [submitted, ...current])
     setIsCreateOpen(false)
     setToast("Event published")
   }
 
   async function toggleLike() {
-    if (!selectedEvent || socialLoading) return
-    const { data: userData } = await supabase.auth.getUser()
-    const userId = userData.user?.id || localStorage.getItem("venty_guest_id") || crypto.randomUUID()
-    if (!userData.user?.id) localStorage.setItem("venty_guest_id", userId)
+    if (!selectedEvent || likeLoading) return
+    const userId = user?.id || localStorage.getItem("venty_guest_id") || crypto.randomUUID()
+    if (!user) localStorage.setItem("venty_guest_id", userId)
 
     if (liked) {
       setLiked(false)
       setLikeCount((count) => Math.max(0, count - 1))
-      await supabase.from("event_likes").delete().eq("event_id", selectedEvent.id).eq("user_id", userId)
+      const { error } = await supabase.from("event_likes").delete().eq("event_id", selectedEvent.id).eq("user_id", userId)
+      if (error) setToast(error.message)
       return
     }
 
@@ -366,16 +363,28 @@ function App() {
     }
   }
 
-  async function addComment(event: React.FormEvent) {
+  async function handleAuth(event: React.FormEvent) {
     event.preventDefault()
-    if (!selectedEvent || !commentText.trim()) return
-    const body = commentText.trim().slice(0, 500)
-    setCommentText("")
-    const { data: userData } = await supabase.auth.getUser()
-    const author = userData.user?.email?.split("@")[0] || "Guest"
-    const { data, error } = await supabase.from("event_comments").insert({ event_id: selectedEvent.id, user_id: userData.user?.id || localStorage.getItem("venty_guest_id") || crypto.randomUUID(), author, body }).select().single()
-    if (error) { setToast(error.message); return }
-    setComments((current) => [...current, { id: data.id, author: data.author, body: data.body, createdAt: data.created_at }])
+    setAuthLoading(true)
+    setAuthError("")
+    const email = authEmail.trim()
+    const password = authPassword
+
+    const { error } = authMode === "signin"
+      ? await supabase.auth.signInWithPassword({ email, password })
+      : await supabase.auth.signUp({ email, password })
+
+    setAuthLoading(false)
+    if (error) { setAuthError(error.message); return }
+    setAuthOpen(false)
+    setAuthPassword("")
+    setToast(authMode === "signin" ? "Signed in" : "Account created")
+  }
+
+  async function signOut() {
+    await supabase.auth.signOut()
+    setUser(null)
+    setToast("Signed out")
   }
 
   function useMyLocation() {
@@ -457,7 +466,12 @@ function App() {
                 </div>
               </div>
             </details>
-            <button className={assistantOpen ? "ai-assistant-button is-open" : "ai-assistant-button"} type="button" aria-expanded={assistantOpen} onClick={() => setAssistantOpen(true)}><Icon name="compass" size={18} /><span>AI</span></button>
+            <button className="ai-assistant-button" type="button" onClick={() => setAssistantOpen(true)}><Icon name="compass" size={18} /><span>AI</span></button>
+            {user ? (
+              <button className="account-button" type="button" onClick={signOut} aria-label="Sign out"><Icon name="user" size={16} /><span>{user.email?.split("@")[0]}</span></button>
+            ) : (
+              <button className="account-button" type="button" onClick={() => setAuthOpen(true)}><Icon name="user" size={16} /><span>Sign in</span></button>
+            )}
           </div>
         </div>
       </header>
@@ -532,7 +546,7 @@ function App() {
           {view === "explore" && eventsNote && eventsStatus !== "loading" && <p className="events-note" role="status">{eventsNote}</p>}
           <div className="filter-stack">
             <div className="date-row" aria-label="Filter by date">{dateFilters.map((item) => <button type="button" key={item} className={dateFilter === item ? "active" : ""} onClick={() => setDateFilter(item)}>{item}</button>)}</div>
-            <div className="category-row" aria-label="Filter by category">{categories.map((item) => <button type="button" key={item} className={dateFilter === item ? "active" : ""} onClick={() => setDateFilter(item)}>{item}</button>)}</div>
+            <div className="category-row" aria-label="Filter by category">{categories.map((item) => <button type="button" key={item} className={category === item ? "active" : ""} onClick={() => setCategory(item)}>{item}</button>)}</div>
           </div>
           {filteredEvents.length > 0 ? (
             <div className="events-grid">{filteredEvents.map((event) => <EventCard event={event} key={event.id} isSaved={savedIds.includes(event.id)} onOpen={() => setSelectedEvent(event)} onSave={() => toggleSaved(event.id)} />)}</div>
@@ -568,27 +582,12 @@ function App() {
               </div>
               <p>{selectedEvent.description}</p>
               <div className="social-row">
-                <button type="button" className={liked ? "social-button is-liked" : "social-button"} onClick={toggleLike} aria-label={liked ? "Unlike event" : "Like event"}>
+                <button type="button" className={liked ? "social-button is-liked" : "social-button"} onClick={toggleLike} disabled={likeLoading} aria-label={liked ? "Unlike event" : "Like event"}>
                   <Icon name="heart" /> {likeCount} {likeCount === 1 ? "like" : "likes"}
                 </button>
                 <button type="button" className="social-button" onClick={() => shareEvent(selectedEvent)}><Icon name="share" /> Share</button>
                 {selectedEvent.sourceUrl && <a className="social-button" href={selectedEvent.sourceUrl} target="_blank" rel="noreferrer"><Icon name="ticket" /> Tickets</a>}
               </div>
-
-              <section className="comments-section">
-                <h3>Comments</h3>
-                {socialLoading ? <p>Loading comments…</p> : comments.length ? (
-                  <div className="comments-list">
-                    {comments.map((comment) => (
-                      <article key={comment.id}><strong>{comment.author}</strong><p>{comment.body}</p></article>
-                    ))}
-                  </div>
-                ) : <p>No comments yet. Start the conversation.</p>}
-                <form onSubmit={addComment}>
-                  <input value={commentText} onChange={(event) => setCommentText(event.target.value)} placeholder="Add a comment" maxLength={500} />
-                  <button type="submit" disabled={!commentText.trim()}>Post</button>
-                </form>
-              </section>
             </div>
           </section>
         </div>
@@ -611,6 +610,27 @@ function App() {
                 <label>Google Maps link<input name="mapsLink" type="url" placeholder="https://" /></label>
                 <button type="submit">Publish event</button>
               </form>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {authOpen && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) setAuthOpen(false) }}>
+          <section className="event-modal auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+            <button className="modal-close" type="button" onClick={() => setAuthOpen(false)} aria-label="Close sign in" autoFocus><Icon name="close" /></button>
+            <div className="modal-content">
+              <p className="modal-category">Account</p>
+              <h2 id="auth-title">{authMode === "signin" ? "Welcome back" : "Create account"}</h2>
+              <form onSubmit={handleAuth} className="create-form">
+                <label>Email<input type="email" value={authEmail} onChange={(event) => setAuthEmail(event.target.value)} required /></label>
+                <label>Password<input type="password" value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} required minLength={6} /></label>
+                {authError && <p className="auth-error">{authError}</p>}
+                <button type="submit" disabled={authLoading}>{authLoading ? "Please wait…" : authMode === "signin" ? "Sign in" : "Create account"}</button>
+              </form>
+              <button type="button" className="auth-switch" onClick={() => { setAuthMode(authMode === "signin" ? "signup" : "signin"); setAuthError("") }}>
+                {authMode === "signin" ? "Need an account? Create one" : "Already have an account? Sign in"}
+              </button>
             </div>
           </section>
         </div>
