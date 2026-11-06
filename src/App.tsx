@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { supabase } from "./supabaseClient"
 
 type DateFilter = "Any day" | "Today" | "Tomorrow" | "This weekend"
@@ -183,9 +183,13 @@ function App() {
   const [coordinates, setCoordinates] = useState<{ latitude: number; longitude: number } | null>(null)
   const [liveEvents, setLiveEvents] = useState<VentyEvent[]>([])
   const [toast, setToast] = useState("")
-  const [assistantMessages, setAssistantMessages] = useState([{ role: "assistant", text: "Hi, I’m Venty. Ask me about upcoming events near you." }])
+  const [assistantMessages, setAssistantMessages] = useState([{ role: "assistant", text: "Hi, I’m Venty. Ask me about events, venues, or plans for your next day out." }])
   const [assistantInput, setAssistantInput] = useState("")
   const [assistantLoading, setAssistantLoading] = useState(false)
+  const assistantBodyRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    assistantBodyRef.current?.scrollTo({ top: assistantBodyRef.current.scrollHeight, behavior: "smooth" })
+  }, [assistantMessages, assistantLoading])
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
 
   const searchLocation = coordinates ? `${coordinates.latitude},${coordinates.longitude}` : location
@@ -285,10 +289,10 @@ function App() {
     setAssistantInput("")
     setAssistantLoading(true)
     try {
-      const response = await fetch("/.netlify/functions/assistant", {
+      const response = await fetch("/api/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ location: searchLocation, message }),
+        body: JSON.stringify({ location: searchLocation, message, history: assistantMessages.slice(1) }),
       })
       const data = await response.json()
       setAssistantMessages((current) => [...current, { role: "assistant", text: data.reply || "I could not find events right now." }])
@@ -351,16 +355,16 @@ function App() {
                   <div><strong>Venty Assistant</strong><span>AI event guide</span></div>
                   <button type="button" aria-label="Close Venty Assistant" onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); document.body.style.overflow = "" }}><Icon name="close" size={19} /></button>
                 </div>
-                <div className="ai-sidebar-body">
+                <div className="ai-sidebar-body" ref={assistantBodyRef}>
                   {assistantMessages.map((message, index) => (
-                    <div className="assistant-message" key={index}><span>{message.role === "user" ? "You" : "Venty Assistant"}</span><p>{message.text}</p></div>
+                    <div className={message.role === "user" ? "assistant-message is-user" : "assistant-message"} key={index}><span>{message.role === "user" ? "You" : "Venty Assistant"}</span><p>{message.text}</p></div>
                   ))}
-                  {assistantLoading && <div className="assistant-message"><span>Venty Assistant</span><p>Searching events…</p></div>}
+                  {assistantLoading && <div className="assistant-message assistant-typing"><span>Venty Assistant</span><p>Searching events</p></div>}
                 </div>
                 <form className="ai-composer" onSubmit={sendAssistantMessage}>
                   <label htmlFor="venty-assistant-message">Message Venty Assistant</label>
-                  <textarea id="venty-assistant-message" value={assistantInput} onChange={(event) => setAssistantInput(event.target.value)} placeholder="Ask about events near you…" rows={4} />
-                  <div><small>Powered by Groq</small><button type="submit" disabled={assistantLoading}>Send <Icon name="arrow" size={17} /></button></div>
+                  <textarea id="venty-assistant-message" value={assistantInput} onChange={(event) => setAssistantInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} placeholder="Ask about events near you…" rows={4} />
+                  <div><small>AI responses powered by Groq</small><button type="submit" disabled={assistantLoading || !assistantInput.trim()}>Send <Icon name="arrow" size={17} /></button></div>
                 </form>
               </aside>
             </details>
