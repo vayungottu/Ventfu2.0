@@ -1,1 +1,10 @@
-{}
+{
+  "description": "Discover and submit events with venue, date, ticket link, price, and contact email for team approval, then track your submitted events in one place.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
