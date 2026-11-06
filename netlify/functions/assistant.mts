@@ -3,10 +3,11 @@ import { and, asc, eq, gte } from "drizzle-orm"
 import { db } from "../../db/index.js"
 import { events } from "../../db/schema.js"
 import { HYDERABAD, callGroq, isHyderabad, localDate, searchTicketmaster, type CollectedEvent } from "../lib/events.js"
+import { fallbackEvents } from "../lib/fallback-events.mjs"
 
 const SYSTEM_PROMPT = `You are Venty, the friendly event discovery assistant inside the Ventful app.
-You get two kinds of research below: events from Ventful's database and live Ticketmaster results. Prefer those first.
-If they don't answer the question, use browser_search to find more real upcoming public events (district.in, insider.in, bookmyshow.com, allevents.in, venue sites).
+You receive Ventful's currently displayed events below: database events, curated fallback events, and live Ticketmaster results. Treat all of these as the app's current event inventory and prefer them when answering.
+If they do not answer the question, use browser_search to find more real upcoming public events (district.in, insider.in, bookmyshow.com, allevents.in, venue sites).
 For each recommendation give the name, date, time, venue, price if known, and the event's own link. Never invent events or links.
 Keep answers short and mobile-friendly: plain text, short lines, simple "- " bullets, no markdown tables or headings. Exclude adult or explicit events.`
 
@@ -36,6 +37,11 @@ async function gatherResearch(location: string, message: string) {
         })
         .catch((error) => console.error("DB research failed", error)),
     )
+
+    const displayed = fallbackEvents
+      .filter((event) => event.date >= today && event.date <= endDate)
+      .map(line)
+    if (displayed.length) sections.push(`Ventful Discover — curated events currently shown in the app:\n${displayed.join("\n")}`)
   }
 
   const coords = location.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/)
