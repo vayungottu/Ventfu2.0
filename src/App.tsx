@@ -39,11 +39,17 @@ type VentyEvent = {
   sourceUrl?: string
 }
 
+type EventComment = {
+  id: string
+  author: string
+  body: string
+  createdAt: string
+}
+
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>
 }
-
 
 const categoryImages: Record<string, string> = {
   Music: "https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=1200&q=80",
@@ -59,7 +65,7 @@ const categoryImages: Record<string, string> = {
 const categories = ["All", "Music", "Art", "Comedy", "Dance", "Festivals", "Food", "Film", "Sports", "Tech", "Workshops", "Community", "Family"]
 const dateFilters: DateFilter[] = ["Any day", "Today", "Tomorrow", "This weekend"]
 
-function Icon({ name, size = 20 }: { name: "arrow" | "bookmark" | "calendar" | "check" | "chevron" | "close" | "compass" | "location" | "plus" | "search" | "share" | "ticket"; size?: number }) {
+function Icon({ name, size = 20 }: { name: "arrow" | "bookmark" | "calendar" | "check" | "chevron" | "close" | "compass" | "heart" | "location" | "plus" | "search" | "share" | "ticket"; size?: number }) {
   const paths = {
     arrow: <path d="M5 12h14M13 6l6 6-6 6" />,
     bookmark: <path d="M6 4.8A1.8 1.8 0 0 1 7.8 3h8.4A1.8 1.8 0 0 1 18 4.8V21l-6-4-6 4V4.8Z" />,
@@ -68,6 +74,7 @@ function Icon({ name, size = 20 }: { name: "arrow" | "bookmark" | "calendar" | "
     chevron: <path d="m8 10 4 4 4-4" />,
     close: <path d="m6 6 12 12M18 6 6 18" />,
     compass: <><circle cx="12" cy="12" r="9" /><path d="m15.5 8.5-2.1 4.9-4.9 2.1 2.1-4.9 4.9-2.1Z" /></>,
+    heart: <path d="M12 20s-7-4.4-7-9.3A3.9 3.9 0 0 1 12 8a3.9 3.9 0 0 1 7 2.7c0 4.9-7 9.3-7 9.3Z" />,
     location: <><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2.5" /></>,
     plus: <path d="M12 5v14M5 12h14" />,
     search: <path d="m21 21-4.35-4.35M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z" />,
@@ -112,6 +119,29 @@ function normaliseEvent(raw: any, index: number): VentyEvent | null {
     description: raw.description || raw.summary || "Details from the organizer.",
     soon: dateGroupFor(date) === "Today",
     sourceUrl: raw.sourceUrl || "",
+  }
+}
+
+function submittedToVenty(event: SubmittedEvent, index: number): VentyEvent {
+  const date = new Date(event.dateTime)
+  return {
+    id: `user-${event.id}`,
+    day: String(date.getDate()).padStart(2, "0"),
+    weekday: date.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase(),
+    month: date.toLocaleDateString("en-US", { month: "short" }).toUpperCase(),
+    title: event.name,
+    venue: event.venue,
+    area: "Your event",
+    time: date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+    endTime: "",
+    category: "Event",
+    image: categoryImages.Event,
+    color: "#e8452c",
+    dateGroup: dateGroupFor(date),
+    price: event.price || "Price TBA",
+    description: "Published by a Ventful host.",
+    soon: dateGroupFor(date) === "Today",
+    sourceUrl: event.ticketLink || event.socialLink || event.mapsLink || "",
   }
 }
 
@@ -193,16 +223,11 @@ function App() {
   const [assistantLoading, setAssistantLoading] = useState(false)
   const assistantBodyRef = useRef<HTMLDivElement>(null)
   const [assistantOpen, setAssistantOpen] = useState(false)
-  useEffect(() => {
-    if (!assistantOpen) return
-    document.body.style.overflow = "hidden"
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setAssistantOpen(false) }
-    window.addEventListener("keydown", onKey)
-    return () => { document.body.style.overflow = ""; window.removeEventListener("keydown", onKey) }
-  }, [assistantOpen])
-  useEffect(() => {
-    assistantBodyRef.current?.scrollTo({ top: assistantBodyRef.current.scrollHeight, behavior: "smooth" })
-  }, [assistantMessages, assistantLoading, assistantOpen])
+  const [likeCount, setLikeCount] = useState(0)
+  const [liked, setLiked] = useState(false)
+  const [comments, setComments] = useState<EventComment[]>([])
+  const [commentText, setCommentText] = useState("")
+  const [socialLoading, setSocialLoading] = useState(false)
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
 
   const searchLocation = coordinates ? `${coordinates.latitude},${coordinates.longitude}` : location
@@ -232,7 +257,6 @@ function App() {
           setLiveEvents((data.events || []).map(normaliseEvent).filter((event: VentyEvent | null): event is VentyEvent => Boolean(event)))
           setEventsNote(data.note || data.error || "")
           setEventsStatus(data.events ? "ready" : "error")
-          // While the server is researching fresh events, check back for them.
           if (data.refreshing && attempts++ < 20) timer = window.setTimeout(load, 20000)
         })
         .catch(() => { if (!cancelled) { setLiveEvents([]); setEventsStatus("error"); setEventsNote("Couldn’t reach the events service. Please try again shortly.") } })
@@ -243,7 +267,35 @@ function App() {
     return () => { cancelled = true; window.clearTimeout(timer) }
   }, [searchLocation])
 
-  const allEvents = liveEvents
+  useEffect(() => {
+    if (!selectedEvent) return
+    let cancelled = false
+    setSocialLoading(true)
+    setComments([])
+    setLikeCount(0)
+    setLiked(false)
+
+    async function loadSocial() {
+      const { data: userData } = await supabase.auth.getUser()
+      const userId = userData.user?.id || localStorage.getItem("venty_guest_id") || crypto.randomUUID()
+      if (!userData.user?.id) localStorage.setItem("venty_guest_id", userId)
+
+      const [likes, commentsData] = await Promise.all([
+        supabase.from("event_likes").select("user_id").eq("event_id", selectedEvent!.id),
+        supabase.from("event_comments").select("id,author,body,created_at").eq("event_id", selectedEvent!.id).order("created_at", { ascending: true }),
+      ])
+      if (cancelled) return
+      setLikeCount(likes.data?.length || 0)
+      setLiked(Boolean(likes.data?.some((row: any) => row.user_id === userId)))
+      setComments((commentsData.data || []).map((row: any) => ({ id: row.id, author: row.author, body: row.body, createdAt: row.created_at })))
+      setSocialLoading(false)
+    }
+
+    loadSocial()
+    return () => { cancelled = true }
+  }, [selectedEvent])
+
+  const allEvents = useMemo(() => [...submittedEvents.map(submittedToVenty), ...liveEvents], [submittedEvents, liveEvents])
 
   const filteredEvents = useMemo(() => {
     return allEvents.filter((event) => {
@@ -279,15 +331,51 @@ function App() {
       price: String(form.get("price") || ""),
       social_url: String(form.get("socialLink") || "") || null,
       maps_url: String(form.get("mapsLink") || ""),
-      email: String(form.get("email") || ""),
+      email: "",
       status: "approved",
       client_token: localStorage.getItem("venty_submission_token") || crypto.randomUUID(),
     }).select().single()
     if (error) { setToast(error.message); return }
     localStorage.setItem("venty_submission_token", data.client_token)
-    setSubmittedEvents((current) => [{ id: data.id, name: data.title, venue: data.venue, dateTime: data.starts_at, ticketLink: data.ticket_url || "", price: data.price || "", socialLink: data.social_url || "", mapsLink: data.maps_url || "", email: data.email, status: data.status }, ...current])
+    const submitted: SubmittedEvent = { id: data.id, name: data.title, venue: data.venue, dateTime: data.starts_at, ticketLink: data.ticket_url || "", price: data.price || "", socialLink: data.social_url || "", mapsLink: data.maps_url || "", email: "", status: data.status }
+    setSubmittedEvents((current) => [submitted, ...current])
     setIsCreateOpen(false)
     setToast("Event published")
+  }
+
+  async function toggleLike() {
+    if (!selectedEvent || socialLoading) return
+    const { data: userData } = await supabase.auth.getUser()
+    const userId = userData.user?.id || localStorage.getItem("venty_guest_id") || crypto.randomUUID()
+    if (!userData.user?.id) localStorage.setItem("venty_guest_id", userId)
+
+    if (liked) {
+      setLiked(false)
+      setLikeCount((count) => Math.max(0, count - 1))
+      await supabase.from("event_likes").delete().eq("event_id", selectedEvent.id).eq("user_id", userId)
+      return
+    }
+
+    setLiked(true)
+    setLikeCount((count) => count + 1)
+    const { error } = await supabase.from("event_likes").insert({ event_id: selectedEvent.id, user_id: userId })
+    if (error) {
+      setLiked(false)
+      setLikeCount((count) => Math.max(0, count - 1))
+      setToast(error.message)
+    }
+  }
+
+  async function addComment(event: React.FormEvent) {
+    event.preventDefault()
+    if (!selectedEvent || !commentText.trim()) return
+    const body = commentText.trim().slice(0, 500)
+    setCommentText("")
+    const { data: userData } = await supabase.auth.getUser()
+    const author = userData.user?.email?.split("@")[0] || "Guest"
+    const { data, error } = await supabase.from("event_comments").insert({ event_id: selectedEvent.id, user_id: userData.user?.id || localStorage.getItem("venty_guest_id") || crypto.randomUUID(), author, body }).select().single()
+    if (error) { setToast(error.message); return }
+    setComments((current) => [...current, { id: data.id, author: data.author, body: data.body, createdAt: data.created_at }])
   }
 
   function useMyLocation() {
@@ -373,30 +461,31 @@ function App() {
           </div>
         </div>
       </header>
-        {assistantOpen && createPortal(
-          <div className="ai-layer">
-              <button className="ai-sidebar-backdrop" type="button" aria-label="Close Venty Assistant" onClick={() => setAssistantOpen(false)} />
-              <aside className="ai-sidebar" aria-label="Venty Assistant">
-                <div className="ai-sidebar-header">
-                  <div className="ai-mark"><Icon name="compass" size={20} /></div>
-                  <div><strong>Venty Assistant</strong><span>AI event guide</span></div>
-                  <button type="button" aria-label="Close Venty Assistant" onClick={() => setAssistantOpen(false)}><Icon name="close" size={19} /></button>
-                </div>
-                <div className="ai-sidebar-body" ref={assistantBodyRef}>
-                  {assistantMessages.map((message, index) => (
-                    <div className={message.role === "user" ? "assistant-message is-user" : "assistant-message"} key={index}><span>{message.role === "user" ? "You" : "Venty Assistant"}</span><p>{message.text}</p></div>
-                  ))}
-                  {assistantLoading && <div className="assistant-message assistant-typing"><span>Venty Assistant</span><p>Searching events</p></div>}
-                </div>
-                <form className="ai-composer" onSubmit={sendAssistantMessage}>
-                  <label htmlFor="venty-assistant-message">Message Venty Assistant</label>
-                  <textarea id="venty-assistant-message" value={assistantInput} onChange={(event) => setAssistantInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} placeholder="Ask about events near you…" rows={4} />
-                  <div><small>AI responses powered by Groq</small><button type="submit" disabled={assistantLoading || !assistantInput.trim()}>Send <Icon name="arrow" size={17} /></button></div>
-                </form>
-              </aside>
-          </div>,
-          document.body,
-        )}
+
+      {assistantOpen && createPortal(
+        <div className="ai-layer">
+          <button className="ai-sidebar-backdrop" type="button" aria-label="Close Venty Assistant" onClick={() => setAssistantOpen(false)} />
+          <aside className="ai-sidebar" aria-label="Venty Assistant">
+            <div className="ai-sidebar-header">
+              <div className="ai-mark"><Icon name="compass" size={20} /></div>
+              <div><strong>Venty Assistant</strong><span>AI event guide</span></div>
+              <button type="button" aria-label="Close Venty Assistant" onClick={() => setAssistantOpen(false)}><Icon name="close" size={19} /></button>
+            </div>
+            <div className="ai-sidebar-body" ref={assistantBodyRef}>
+              {assistantMessages.map((message, index) => (
+                <div className={message.role === "user" ? "assistant-message is-user" : "assistant-message"} key={index}><span>{message.role === "user" ? "You" : "Venty Assistant"}</span><p>{message.text}</p></div>
+              ))}
+              {assistantLoading && <div className="assistant-message assistant-typing"><span>Venty Assistant</span><p>Searching events</p></div>}
+            </div>
+            <form className="ai-composer" onSubmit={sendAssistantMessage}>
+              <label htmlFor="venty-assistant-message">Message Venty Assistant</label>
+              <textarea id="venty-assistant-message" value={assistantInput} onChange={(event) => setAssistantInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} placeholder="Ask about events near you…" rows={4} />
+              <div><small>AI responses powered by Groq</small><button type="submit" disabled={assistantLoading || !assistantInput.trim()}>Send <Icon name="arrow" size={17} /></button></div>
+            </form>
+          </aside>
+        </div>,
+        document.body,
+      )}
 
       <main className="app-main">
         <section className="app-intro">
@@ -443,7 +532,7 @@ function App() {
           {view === "explore" && eventsNote && eventsStatus !== "loading" && <p className="events-note" role="status">{eventsNote}</p>}
           <div className="filter-stack">
             <div className="date-row" aria-label="Filter by date">{dateFilters.map((item) => <button type="button" key={item} className={dateFilter === item ? "active" : ""} onClick={() => setDateFilter(item)}>{item}</button>)}</div>
-            <div className="category-row" aria-label="Filter by category">{categories.map((item) => <button type="button" key={item} className={category === item ? "active" : ""} onClick={() => setCategory(item)}>{item}</button>)}</div>
+            <div className="category-row" aria-label="Filter by category">{categories.map((item) => <button type="button" key={item} className={dateFilter === item ? "active" : ""} onClick={() => setDateFilter(item)}>{item}</button>)}</div>
           </div>
           {filteredEvents.length > 0 ? (
             <div className="events-grid">{filteredEvents.map((event) => <EventCard event={event} key={event.id} isSaved={savedIds.includes(event.id)} onOpen={() => setSelectedEvent(event)} onSave={() => toggleSaved(event.id)} />)}</div>
@@ -473,15 +562,33 @@ function App() {
               <p className="modal-category">{selectedEvent.category}</p>
               <h2 id="event-modal-title">{selectedEvent.title}</h2>
               <div className="modal-facts">
-                <div><Icon name="calendar" /><span><strong>{selectedEvent.weekday}, {selectedEvent.day} {selectedEvent.month}</strong>{selectedEvent.time}{selectedEvent.endTime ? `–${selectedEvent.endTime}` : ""}</span></div>
-                <div><Icon name="location" /><span><strong>{selectedEvent.venue}</strong>{selectedEvent.area}</span></div>
-                <div><Icon name="ticket" /><span><strong>{selectedEvent.price}</strong>Check organizer for details</span></div>
+                <div><Icon name="calendar" /><span><strong>{selectedEvent.weekday}, {selectedEvent.day} {selectedEvent.month}</strong><br />{selectedEvent.time}</span></div>
+                <div><Icon name="location" /><span><strong>{selectedEvent.venue}</strong><br />{selectedEvent.area || selectedEvent.venue}</span></div>
+                <div><Icon name="ticket" /><span><strong>{selectedEvent.price}</strong><br />Entry details</span></div>
               </div>
-              <p className="modal-description">{selectedEvent.description}</p>
-              <div className="modal-actions">
-                <a className="primary-action" href={selectedEvent.sourceUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedEvent.venue)}`} target="_blank" rel="noreferrer">View event <Icon name="arrow" /></a>
-                <button type="button" onClick={() => shareEvent(selectedEvent)}><Icon name="share" /><span>Share</span></button>
+              <p>{selectedEvent.description}</p>
+              <div className="social-row">
+                <button type="button" className={liked ? "social-button is-liked" : "social-button"} onClick={toggleLike} aria-label={liked ? "Unlike event" : "Like event"}>
+                  <Icon name="heart" /> {likeCount} {likeCount === 1 ? "like" : "likes"}
+                </button>
+                <button type="button" className="social-button" onClick={() => shareEvent(selectedEvent)}><Icon name="share" /> Share</button>
+                {selectedEvent.sourceUrl && <a className="social-button" href={selectedEvent.sourceUrl} target="_blank" rel="noreferrer"><Icon name="ticket" /> Tickets</a>}
               </div>
+
+              <section className="comments-section">
+                <h3>Comments</h3>
+                {socialLoading ? <p>Loading comments…</p> : comments.length ? (
+                  <div className="comments-list">
+                    {comments.map((comment) => (
+                      <article key={comment.id}><strong>{comment.author}</strong><p>{comment.body}</p></article>
+                    ))}
+                  </div>
+                ) : <p>No comments yet. Start the conversation.</p>}
+                <form onSubmit={addComment}>
+                  <input value={commentText} onChange={(event) => setCommentText(event.target.value)} placeholder="Add a comment" maxLength={500} />
+                  <button type="submit" disabled={!commentText.trim()}>Post</button>
+                </form>
+              </section>
             </div>
           </section>
         </div>
@@ -489,27 +596,27 @@ function App() {
 
       {isCreateOpen && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) setIsCreateOpen(false) }}>
-          <section className="create-event-modal" role="dialog" aria-modal="true" aria-labelledby="create-event-title">
-            <div className="create-event-header">
-              <div><p className="modal-category">Submit an event</p><h2 id="create-event-title">Tell us what’s happening.</h2><p>Add the details below. Your event will be published immediately.</p></div>
-              <button className="create-modal-close" type="button" onClick={() => setIsCreateOpen(false)} aria-label="Close event form"><Icon name="close" /></button>
+          <section className="event-modal create-modal" role="dialog" aria-modal="true" aria-labelledby="create-event-title">
+            <button className="modal-close" type="button" onClick={() => setIsCreateOpen(false)} aria-label="Close event upload" autoFocus><Icon name="close" /></button>
+            <div className="modal-content">
+              <p className="modal-category">Host</p>
+              <h2 id="create-event-title">Add your event</h2>
+              <form onSubmit={submitEvent} className="create-form">
+                <label>Event name<input name="name" required maxLength={140} /></label>
+                <label>Venue<input name="venue" required maxLength={160} /></label>
+                <label>Date and time<input name="dateTime" type="datetime-local" required /></label>
+                <label>Ticket link<input name="ticketLink" type="url" placeholder="https://" /></label>
+                <label>Price<input name="price" placeholder="Free, ₹499, etc." /></label>
+                <label>Social media page<input name="socialLink" type="url" placeholder="https://" /></label>
+                <label>Google Maps link<input name="mapsLink" type="url" placeholder="https://" /></label>
+                <button type="submit">Publish event</button>
+              </form>
             </div>
-            <form className="event-form" onSubmit={submitEvent}>
-              <label className="form-field form-field-wide"><span>Event name</span><input name="name" type="text" placeholder="e.g. Sunday Sessions" required autoFocus /></label>
-              <label className="form-field form-field-wide"><span>Location / venue</span><input name="venue" type="text" placeholder="Venue name and area" required /></label>
-              <label className="form-field form-field-wide"><span>Google Maps link</span><input name="mapsLink" type="url" placeholder="https://maps.app.goo.gl/..." required /></label>
-              <label className="form-field form-field-wide"><span>Date and time</span><input name="dateTime" type="datetime-local" required /></label>
-              <label className="form-field form-field-wide"><span>Link to purchase tickets</span><input name="ticketLink" type="url" placeholder="https://" required /></label>
-              <label className="form-field form-field-wide"><span>Ticket price</span><input name="price" type="text" placeholder="e.g. ₹500 or Free" required /></label>
-              <label className="form-field form-field-wide"><span>Event or organiser social media page</span><input name="socialLink" type="url" placeholder="https://instagram.com/yourpage" /><small>Optional.</small></label>
-              <label className="form-field form-field-wide"><span>Email address</span><input name="email" type="email" placeholder="you@example.com" required /></label>
-              <div className="form-footer"><p><Icon name="check" size={17} />Your event will be published immediately.</p><button type="submit">Publish event <Icon name="arrow" /></button></div>
-            </form>
           </section>
         </div>
       )}
 
-      {toast && <div className="toast" role="status"><Icon name="check" size={17} />{toast}</div>}
+      {toast && <div className="toast" role="status">{toast}</div>}
     </div>
   )
 }
